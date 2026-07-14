@@ -143,6 +143,52 @@
   aside::-webkit-scrollbar { width:10px; }
   aside::-webkit-scrollbar-thumb { background:var(--surface-2); border-radius:6px; border:2px solid var(--surface); }
 
+  /* ---- スタート画面（アプリの扉） ---- */
+  #splash { position:fixed; inset:0; z-index:100; background:#000; display:flex;
+    flex-direction:column; align-items:center; justify-content:center; text-align:center;
+    padding:24px; overflow:hidden; transition:opacity .45s ease; }
+  #splash.hide { opacity:0; pointer-events:none; }
+  /* 背景：上からLEDの薄明かり */
+  #splash::before { content:""; position:absolute; inset:0;
+    background:radial-gradient(90% 60% at 50% -10%, rgba(184,255,31,.13), transparent 60%); }
+  /* 装飾：光る音符が乗った五線 */
+  .sp-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+  .sp-staff { position:relative; width:min(760px, 92vw); height:96px; opacity:.5; }
+  .sp-staff i { display:block; position:absolute; left:0; right:0; height:1px; background:#2a2d24; }
+  .sp-staff i:nth-child(1){top:0} .sp-staff i:nth-child(2){top:24px} .sp-staff i:nth-child(3){top:48px}
+  .sp-staff i:nth-child(4){top:72px} .sp-staff i:nth-child(5){top:96px}
+  .sp-note { position:absolute; width:26px; height:19px; border-radius:50%;
+    background:var(--led); transform:rotate(-18deg);
+    animation:sp-glow 3.6s ease-in-out infinite; }
+  .sp-note.n1 { left:18%; top:62px; animation-delay:0s; }
+  .sp-note.n2 { left:47%; top:38px; animation-delay:1.2s; }
+  .sp-note.n3 { left:76%; top:14px; animation-delay:2.4s; }
+  @keyframes sp-glow {
+    0%, 100% { box-shadow:0 0 12px 2px var(--led-glow); opacity:.55; }
+    50% { box-shadow:0 0 34px 8px var(--led-glow); opacity:1; }
+  }
+  /* 前景テキスト */
+  .sp-body { position:relative; display:flex; flex-direction:column; align-items:center; gap:18px;
+    background:rgba(0,0,0,.55); padding:26px 30px; border-radius:18px; backdrop-filter:blur(2px); }
+  .sp-brand { display:flex; align-items:center; gap:9px; font-weight:700; font-size:14px;
+    letter-spacing:.2px; color:var(--muted); text-transform:none; }
+  .sp-led { width:10px; height:10px; border-radius:50%; background:var(--led);
+    box-shadow:0 0 12px 3px var(--led-glow); animation:led-pulse 4.5s ease-in-out infinite; }
+  .sp-title { margin:0; font-size:clamp(2rem, 6vw, 3.4rem); font-weight:800; line-height:1.18;
+    letter-spacing:-1px; color:var(--text); text-wrap:balance; }
+  .sp-title em { font-style:normal; color:var(--led); white-space:nowrap;
+    text-shadow:0 0 24px var(--led-glow); }
+  .sp-sub { margin:0; font-size:clamp(.95rem, 2.4vw, 1.08rem); color:var(--muted); line-height:1.9; }
+  .sp-ctas { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:6px; }
+  button.sp-cta { font-size:15px; padding:12px 26px; border-radius:12px; }
+  #spStart { font-weight:700; box-shadow:0 0 22px -2px var(--led-glow); }
+  #spStart:hover { box-shadow:0 8px 34px -6px var(--led-glow); }
+  .sp-badges { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .sp-badges span { font-size:12px; color:var(--led-bright); border:1px solid rgba(184,255,31,.4);
+    background:rgba(184,255,31,.08); border-radius:999px; padding:4px 13px; }
+  @media (prefers-reduced-motion: reduce) { .sp-note, .sp-led { animation:none; } }
+  @media (max-width:640px) { .sp-br { display:none; } .sp-body { padding:20px 14px; } }
+
   /* ---- タッチ / モバイル ---- */
   /* キャンバスはブラウザのスクロール/ピンチを完全に奪う（アプリ側で処理） */
   #stage, #stage canvas { touch-action:none; }
@@ -170,6 +216,29 @@
 </style>
 </head>
 <body>
+<!-- スタート画面（アプリの扉）。「はじめる」で本体へ、「サンプルで体験」は自動認識まで一気に -->
+<div id="splash">
+  <div class="sp-stage">
+    <div class="sp-staff">
+      <i></i><i></i><i></i><i></i><i></i>
+      <span class="sp-note n1"></span>
+      <span class="sp-note n2"></span>
+      <span class="sp-note n3"></span>
+    </div>
+  </div>
+  <div class="sp-body">
+    <div class="sp-brand"><span class="sp-led"></span>オトミエ</div>
+    <h1 class="sp-title">楽譜が、<span style="white-space:nowrap"><em>光って</em>見える。</span></h1>
+    <p class="sp-sub">スクショを読み込むだけで、すべての音に名前が、<br class="sp-br">すべての小節にコードが灯る。教える人のための道具。</p>
+    <div class="sp-ctas">
+      <button id="spStart" class="primary sp-cta">はじめる</button>
+      <button id="spDemo" class="sp-cta ghost">30秒で体験（サンプル）</button>
+    </div>
+    <div class="sp-badges">
+      <span>無料</span><span>登録不要</span><span>画像は端末の外に出ません</span>
+    </div>
+  </div>
+</div>
 <div id="app">
   <header>
     <div class="brand">
@@ -1033,10 +1102,11 @@
   // ================= 自動認識（CV, ベストエフォート） =================
   // 画像から五線と符頭を検出し、Phase 2 のアノテーションに「プリフィル」する。
   // 結果は全て手動修正できる（誤りが出る前提）。
-  function autoDetect() {
+  function autoDetect(opts) {
+    var silent = !!(opts && opts.silent); // スタート画面のデモから呼ぶとき true
     if (!S.img) { alert('先に画像を開いてください。'); return; }
     if (S.notes.length || S.staves.length) {
-      if (!confirm('自動認識で今の五線・音符を置き換えます。よろしいですか?')) return;
+      if (!silent && !confirm('自動認識で今の五線・音符を置き換えます。よろしいですか?')) return;
     }
     // オフスクリーンに実寸で描いて画素を取得（blob URL 同一オリジンなので getImageData 可）
     var oc = document.createElement('canvas');
@@ -1078,6 +1148,7 @@
     });
     updateLessonUI();
     renderPanels(); draw();
+    if (silent) return;
     alert('自動認識：五線 ' + S.staves.length + ' 段、符頭 ' + S.notes.length + ' 個、'
         + '小節 ' + S.measures.length + ' 個を検出しました。\n'
         + '調号は「' + KEY_LABELS[String(ks)] + '」として割当てました（必要なら各譜表で変更）。\n'
@@ -1397,13 +1468,31 @@
     });
     return c.toDataURL('image/png');
   }
-  document.getElementById('btnSample').addEventListener('click', function () {
+  function loadSample(andThen) {
     var img = new Image();
     img.onload = function () {
       S.img = img; resetAnnotations(); fit();
       persistImage(); resetHistory();
+      if (andThen) andThen();
     };
     img.src = makeSampleImage();
+  }
+  document.getElementById('btnSample').addEventListener('click', function () { loadSample(); });
+
+  // ---- スタート画面（扉） ----
+  var splash = document.getElementById('splash');
+  function hideSplash() {
+    splash.classList.add('hide');
+    setTimeout(function () { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 500);
+  }
+  document.getElementById('spStart').addEventListener('click', hideSplash);
+  // 「30秒で体験」：サンプル→自動認識→1小節目のレッスンまでノンストップ
+  document.getElementById('spDemo').addEventListener('click', function () {
+    hideSplash();
+    loadSample(function () {
+      autoDetect({ silent: true });
+      if (S.measures.length) gotoMeasure(0);
+    });
   });
 
   resize();
