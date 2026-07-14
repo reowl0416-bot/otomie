@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>オトミエ — 楽譜の音名・コードが見える</title>
+<meta name="description" content="楽譜のスクショを読み込むと、音名（C4）とコード（Am7）を自動で重ねて表示。小節送りで1小節ずつ教えられる無料ツール。登録不要・画像は端末内で処理。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%BC%3C/text%3E%3C/svg%3E">
+<!-- OGP: GitHub Pages 公開後、下2行の URL を実際の公開URLに書き換えてください -->
+<meta property="og:url" content="https://YOUR-ACCOUNT.github.io/otomie/">
+<meta property="og:image" content="https://YOUR-ACCOUNT.github.io/otomie/ogp.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="オトミエ — 楽譜の音名・コードが見える">
+<meta property="og:description" content="楽譜のスクショを読み込むと、音名とコードを自動で重ねて表示。小節送りで1小節ずつ。無料・登録不要・画像は端末内で処理。">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  /* DESIGN.md（Linear風）に準拠。単一HTML・オフライン厳守（外部フォント/CDNなし）。
+     near-black canvas + charcoal panels + hairline borders + ラベンダー単一アクセント。 */
+  :root {
+    --stage:#010102; --surface:#0b0c0d; --bg:#0f1011; --surface-2:#16181a; --surface-3:#202225;
+    --border:#23252a; --border-strong:#34343a;
+    --text:#f7f8f8; --muted:#8a8f98; --faint:#62666d;
+    --blue:#5e6ad2; --blue-hi:#828fff; --gold:#d7a44a; --danger:#e5484d; --good:#27a644;
+    --r:7px; --r-lg:10px; --pill:999px;
+    --shadow:0 8px 24px rgba(0,0,0,.5);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%;
+    font-family: system-ui, -apple-system, "Inter", "Hiragino Sans", sans-serif;
+    background:var(--stage); color:var(--text); -webkit-font-smoothing:antialiased;
+    letter-spacing:-0.1px; }
+  #app { display:flex; flex-direction:column; height:100vh; }
+
+  /* ---- ツールバー ---- */
+  header { padding:9px 14px; background:var(--surface); border-bottom:1px solid var(--border);
+    display:flex; flex-wrap:wrap; gap:8px 10px; align-items:center; }
+  .brand { display:flex; align-items:baseline; gap:8px; margin-right:4px; }
+  .brand .logo { font-size:15px; }
+  .brand .title { font-weight:600; font-size:14px; letter-spacing:-0.3px; }
+  .brand .sub { font-size:11px; color:var(--faint); letter-spacing:0; }
+
+  .group { display:flex; gap:6px; align-items:center; }
+  .group.boxed { background:var(--bg); padding:4px 8px 6px; border-radius:var(--r-lg); border:1px solid var(--border);
+    flex-direction:column; align-items:stretch; }
+  .group.boxed > .lbl { align-self:flex-start; }
+  .group .btns { display:flex; gap:4px; align-items:center; }
+  .lbl { color:var(--faint); font-size:10px; text-transform:uppercase; letter-spacing:.5px; font-weight:500; }
+  .sep { width:1px; align-self:stretch; background:var(--border); margin:3px 2px; }
+
+  button, select, input[type=text] { font-family:inherit; letter-spacing:-0.1px; }
+  button, select { background:var(--surface-2); color:var(--text); border:1px solid var(--border);
+    border-radius:var(--r); padding:6px 11px; font-size:13px; font-weight:500; cursor:pointer; line-height:1.2;
+    transition:background .13s ease, border-color .13s ease, color .13s ease, box-shadow .13s ease; }
+  button:hover, select:hover { background:var(--surface-3); border-color:var(--border-strong); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline:none; border-color:var(--blue);
+    box-shadow:0 0 0 3px rgba(94,106,210,.32); }
+  button:active { transform:translateY(.5px); }
+
+  /* トグル（モード/ラベル密度）：アクティブはラベンダーの塗り（フラット） */
+  button.on { background:var(--blue); border-color:var(--blue); color:#fff; }
+  button.on:hover { background:var(--blue-hi); border-color:var(--blue-hi); }
+  /* 主ボタン（唯一のCTAアクセント＝ラベンダー） */
+  button.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  button.primary:hover { background:var(--blue-hi); border-color:var(--blue-hi); }
+  /* .gold は和声系の予備（現在CTAには未使用） */
+  button.gold { background:var(--surface-2); border-color:var(--border); color:var(--gold); }
+  button.gold:hover { background:var(--surface-3); }
+  button.warn { background:transparent; border-color:#4a2b2e; color:#e5808a; }
+  button.warn:hover { background:rgba(229,72,77,.12); border-color:var(--danger); color:#ff9ba3; }
+  /* 削除系モードがアクティブなときは塗りの赤で「今この状態」を明示 */
+  button.mode.warn.on { background:var(--danger); border-color:var(--danger); color:#fff; }
+  button.mode.warn.on:hover { background:#eb5c60; }
+  button.ghost { background:transparent; border-color:var(--border); color:var(--muted); }
+  button.ghost:hover { color:var(--text); }
+  button.icon { padding:6px 9px; min-width:32px; }
+
+  select { padding-right:8px; }
+  #lessonPos { color:var(--text); font-weight:600; font-size:12px; min-width:64px; text-align:center;
+    letter-spacing:0; text-transform:none; }
+
+  main { flex:1; display:flex; min-height:0; }
+
+  /* ---- キャンバス ---- */
+  #stage { flex:1; position:relative; overflow:hidden; background:
+    radial-gradient(130% 100% at 50% -10%, #0a0b0d 0%, var(--stage) 60%); }
+  canvas { position:absolute; top:0; left:0; display:block; }
+  #hint { position:absolute; left:14px; top:14px; background:rgba(15,16,17,.92);
+    border:1px solid var(--border); padding:9px 12px; border-radius:var(--r);
+    font-size:12px; color:var(--muted); max-width:360px; line-height:1.5; pointer-events:none;
+    box-shadow:var(--shadow); backdrop-filter:blur(4px); }
+  #dropzone { position:absolute; inset:0; display:none; flex-direction:column; gap:12px;
+    align-items:center; justify-content:center; text-align:center; pointer-events:none; padding:24px; }
+  #stage.empty #dropzone { display:flex; }
+  #stage.empty #hint { display:none; }
+  #dropzone .dz-icon { font-size:40px; opacity:.85; }
+  #dropzone .dz-title { font-size:16px; font-weight:600; color:var(--text); letter-spacing:-0.3px; }
+  #dropzone .dz-sub { font-size:13px; color:var(--muted); line-height:1.7; max-width:420px; }
+  #dropzone button { pointer-events:auto; margin-top:6px; } /* 親は pointer-events:none */
+
+  /* ---- 右パネル ---- */
+  aside { width:300px; background:var(--surface); border-left:1px solid var(--border);
+    padding:14px; overflow-y:auto; font-size:13px; }
+  .card { background:var(--bg); border:1px solid var(--border); border-radius:var(--r-lg);
+    padding:12px 13px; margin-bottom:12px; }
+  .card > h3 { margin:0 0 9px; font-size:10px; color:var(--faint); text-transform:uppercase;
+    letter-spacing:.6px; font-weight:500; display:flex; align-items:center; gap:7px; }
+  .card > h3 .dot { width:6px; height:6px; border-radius:50%; background:var(--faint); }
+  .card.note > h3 .dot { background:var(--blue); }
+  .card.chord > h3 .dot { background:var(--gold); }
+  aside h3.sub { margin:12px 0 6px; font-size:10px; color:var(--faint); text-transform:uppercase; letter-spacing:.6px; font-weight:500; }
+  aside .row { display:flex; gap:6px; align-items:center; margin:7px 0; flex-wrap:wrap; }
+  aside .big { font-size:28px; font-weight:600; letter-spacing:-0.6px; line-height:1.15; margin:2px 0 5px; }
+  .card.chord .big { color:var(--gold); }
+  aside .cand { display:block; width:100%; text-align:left; margin:4px 0; }
+  aside .muted { color:var(--muted); line-height:1.55; }
+  input[type=text] { background:var(--stage); color:var(--text); border:1px solid var(--border);
+    border-radius:var(--r); padding:6px 8px; font-size:13px; width:100px; }
+  .kbd { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; background:var(--stage);
+    border:1px solid var(--border); border-radius:5px; padding:1px 6px; font-size:11px; color:var(--muted); letter-spacing:0; }
+  .help { line-height:1.75; color:var(--muted); }
+  .help b { color:var(--text); font-weight:600; }
+  .help ol { margin:4px 0; padding-left:18px; }
+  .help li { margin:3px 0; }
+  aside::-webkit-scrollbar { width:10px; }
+  aside::-webkit-scrollbar-thumb { background:var(--surface-2); border-radius:6px; border:2px solid var(--surface); }
+
+  /* ---- タッチ / モバイル ---- */
+  /* キャンバスはブラウザのスクロール/ピンチを完全に奪う（アプリ側で処理） */
+  #stage, #stage canvas { touch-action:none; }
+  #stage { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  @media (pointer:coarse) {
+    button, select { padding:10px 13px; }          /* 指で押せるサイズに */
+    input[type=text], select { font-size:16px; }   /* iOSのフォーカス時自動ズーム防止 */
+    #lessonPos { min-width:56px; }
+  }
+  @media (max-width: 900px) {
+    main { flex-direction:column; }                /* 右パネルを下に積む */
+    aside { width:100%; height:34vh; border-left:none; border-top:1px solid var(--border); }
+    .brand .sub { display:none; }
+    /* ツールバーは折り返さず横スクロール1行（キャンバスの縦幅を確保） */
+    header { padding:6px 8px; gap:6px; flex-wrap:nowrap; overflow-x:auto;
+      -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    header::-webkit-scrollbar { display:none; }
+    header > * { flex:0 0 auto; }
+    .group.boxed { padding:3px 6px 4px; }
+    .group .btns { flex-wrap:nowrap; }
+    button, select { white-space:nowrap; }
+    #hint { max-width:72vw; font-size:11px; left:8px; top:8px; }
+    .sep { display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <span class="logo">🎼</span>
+      <span class="title">オトミエ</span>
+      <span class="sub">楽譜の音名・コードが見える</span>
+    </div>
+    <div class="group">
+      <button id="btnLoad">画像を開く</button>
+      <button id="btnAuto" class="primary">自動認識</button>
+      <button id="btnUndo" class="icon ghost" title="取り消し（⌘Z）">↶</button>
+      <button id="btnRedo" class="icon ghost" title="やり直し（⌘⇧Z）">↷</button>
+      <button id="btnExport" class="ghost" title="画像と注釈をJSONファイルに保存">保存</button>
+      <button id="btnImport" class="ghost" title="保存したJSONファイルから復元">復元</button>
+      <button id="btnPng" class="ghost" title="注釈つき画像をPNGで書き出し">PNG</button>
+      <input id="file" type="file" accept="image/png,image/jpeg" style="display:none">
+      <input id="jsonfile" type="file" accept="application/json,.json" style="display:none">
+    </div>
+    <div class="sep"></div>
+    <div class="group boxed">
+      <span class="lbl">モード</span>
+      <span class="btns">
+        <button class="mode" data-mode="staff">譜表設定</button>
+        <button class="mode on" data-mode="note">音符</button>
+        <button class="mode warn" data-mode="erase">消す</button>
+        <button class="mode" data-mode="region">コード範囲</button>
+        <button class="mode" data-mode="pan">移動</button>
+      </span>
+    </div>
+    <div class="group boxed">
+      <span class="lbl">設定する譜表 / 調号</span>
+      <span class="btns">
+        <select id="clef"><option value="treble">ト音（上段・メロディ）</option><option value="bass">ヘ音（下段・コード/左手）</option></select>
+        <select id="keysig"></select>
+      </span>
+    </div>
+    <div class="group boxed">
+      <span class="lbl">ラベル密度</span>
+      <span class="btns">
+        <button class="dens on" data-d="all">全音</button>
+        <button class="dens" data-d="chords">コードのみ</button>
+        <button class="dens" data-d="selected">選択のみ</button>
+      </span>
+    </div>
+    <div class="group boxed">
+      <span class="lbl">レッスン（小節送り）</span>
+      <span class="btns">
+        <button id="lessonToggle">小節送り開始</button>
+        <button id="lessonPrev" class="icon">◀</button>
+        <span id="lessonPos">–</span>
+        <button id="lessonNext" class="icon">▶</button>
+      </span>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <button id="zoomIn" class="icon ghost">＋</button><button id="zoomOut" class="icon ghost">−</button><button id="zoomFit" class="ghost">全体</button>
+    </div>
+  </header>
+  <main>
+    <div id="stage" class="empty">
+      <canvas id="cv"></canvas>
+      <div id="hint"></div>
+      <div id="dropzone">
+        <div class="dz-icon">🎼</div>
+        <div class="dz-title">楽譜のスクショを読み込む</div>
+        <div class="dz-sub">「画像を開く」か、<span class="kbd">⌘/Ctrl + V</span> で貼り付け・ドラッグ&ドロップ。<br>読み込んだら「自動認識」で五線・符頭・小節を下書きします。<br><br>
+        ※きれいにレンダリングされた楽譜のスクショ向けです（紙の写真・手書きは非対応）。<br>
+        画像は<b>端末内だけで処理</b>され、外部に送信されることはありません。</div>
+        <button id="btnSample">サンプル楽譜で試す</button>
+      </div>
+    </div>
+    <aside>
+      <div class="card note">
+        <h3><span class="dot"></span>選択中の音符</h3>
+        <div id="notePanel" class="muted">音符を選択すると、ここで音名を確認・修正できます。</div>
+      </div>
+      <div class="card chord">
+        <h3><span class="dot"></span>コード / レッスン</h3>
+        <div id="chordPanel" class="muted">「コード範囲」でドラッグ、または「小節送り」で、範囲内の音からコードを推定します。</div>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>使い方</h3>
+        <div class="help">
+          <ol>
+            <li><b>画像を開く</b>（<span class="kbd">⌘/Ctrl+V</span>・ドロップも可）→ <b>✨自動認識</b></li>
+            <li><b>譜表設定</b>：上段（ト音）の<b>最下線→最上線</b>をクリック。<b>自動で下段（ヘ音）へ</b>切替。段が複数あれば繰り返す。</li>
+            <li><b>音符</b>：クリックで●を配置／選択。<span class="kbd">↑↓</span>で半段移動。</li>
+            <li><b>消す</b>：●クリックで1個、<b>囲んでドラッグ</b>で範囲一括削除（拍子・テンポ・符尾の掃除に）。</li>
+            <li><b>コード範囲</b>：横ドラッグ → コード名。</li>
+          </ol>
+          <div class="muted"><span class="kbd">⌘Z</span> 取り消し（<span class="kbd">⌘⇧Z</span> やり直し）/ <span class="kbd">s</span><span class="kbd">f</span><span class="kbd">n</span> 臨時記号 / <span class="kbd">0</span> 解除 / <span class="kbd">Del</span> 削除 / ●右クリックで即削除 / <span class="kbd">←→</span> 小節送り</div>
+          <div class="muted" style="margin-top:6px">作業は自動保存され、次回開いたとき復元されます。「保存/復元」でファイルにも残せます。「PNG」で注釈つき画像を書き出せます。</div>
+          <div class="muted" style="margin-top:6px">タッチ操作：<b>1本指</b>＝各モードの操作 / <b>2本指</b>＝移動・ピンチでズーム。</div>
+          <div class="muted" style="margin-top:8px; font-size:11px; color:var(--faint)">プライバシー：画像・注釈はすべて端末内で処理され、外部送信されません。<br>著作権：市販楽譜等のスクショは、私的利用・指導の正当な範囲でご利用ください。</div>
+        </div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script src="engine.js"></script>
+<script src="cv.js"></script>
+<script>
+(function () {
+  'use strict';
+  var E = window.MusicEngine;
+
+  // ---- DOM ----
+  var stage = document.getElementById('stage');
+  var cv = document.getElementById('cv');
+  var ctx = cv.getContext('2d');
+  var hint = document.getElementById('hint');
+  var fileInput = document.getElementById('file');
+  var clefSel = document.getElementById('clef');
+  var keySel = document.getElementById('keysig');
+  var notePanel = document.getElementById('notePanel');
+  var chordPanel = document.getElementById('chordPanel');
+
+  // 調号セレクトの中身（メジャーキー名つき）
+  var KEY_LABELS = {
+    '-7':'C♭ (♭7)', '-6':'G♭ (♭6)', '-5':'D♭ (♭5)', '-4':'A♭ (♭4)', '-3':'E♭ (♭3)',
+    '-2':'B♭ (♭2)', '-1':'F (♭1)', '0':'C / Am (♯♭なし)', '1':'G (♯1)', '2':'D (♯2)',
+    '3':'A (♯3)', '4':'E (♯4)', '5':'B (♯5)', '6':'F♯ (♯6)', '7':'C♯ (♯7)'
+  };
+  for (var k = -7; k <= 7; k++) {
+    var o = document.createElement('option');
+    o.value = String(k); o.textContent = KEY_LABELS[String(k)];
+    if (k === 0) o.selected = true;
+    keySel.appendChild(o);
+  }
+
+  // ---- 状態 ----
+  var S = {
+    img: null,
+    scale: 1, offX: 0, offY: 0,
+    mode: 'note',
+    staves: [],          // {clef, keySig, bottomY, topY}  (world座標)
+    selStaff: -1,
+    notes: [],           // {id, staffIndex, x, staffStep, accidental|null, overrideName|null}
+    selNote: -1,
+    regions: [],         // {id, x0, x1, chosenName|null}
+    selRegion: -1,
+    density: 'all',
+    pendingStaffBottom: null, // 譜表設定の1クリック目
+    measures: [],        // {x0,x1, set:[staffIdx], top, bottom}（読み順：段 上→下・小節 左→右）
+    lessonIndex: -1,     // レッスン(小節送り)モード：現在の小節。-1 なら無効
+    dragStart: null, drag: null
+  };
+  var idSeq = 1;
+  var DPR = window.devicePixelRatio || 1;
+
+  // ---- 座標変換 ----
+  function w2sX(x){ return x * S.scale + S.offX; }
+  function w2sY(y){ return y * S.scale + S.offY; }
+  function s2wX(x){ return (x - S.offX) / S.scale; }
+  function s2wY(y){ return (y - S.offY) / S.scale; }
+
+  function resize() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    cv.style.width = w + 'px'; cv.style.height = h + 'px';
+    cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    draw();
+  }
+  window.addEventListener('resize', resize);
+
+  // ---- 譜表ジオメトリ ----
+  function pxPerStep(st){ return (st.bottomY - st.topY) / 8; } // 5線=4間=8ステップ
+  function noteWorldY(st, staffStep){ return st.bottomY - staffStep * pxPerStep(st); }
+  function yToStaffStep(st, worldY){ return Math.round((st.bottomY - worldY) / pxPerStep(st)); }
+  function staffMidY(st){ return (st.topY + st.bottomY) / 2; }
+
+  function nearestStaff(worldY) {
+    var best = -1, bestD = Infinity;
+    for (var i = 0; i < S.staves.length; i++) {
+      var d = Math.abs(worldY - staffMidY(S.staves[i]));
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  // ---- 音符の解決 ----
+  function noteName(n) {
+    if (n.overrideName) return n.overrideName;
+    var st = S.staves[n.staffIndex];
+    if (!st) return '?';
+    return E.resolveNote({ clef: st.clef, staffStep: n.staffStep, keySig: st.keySig, accidental: n.accidental }).name;
+  }
+  function noteResolved(n) {
+    var st = S.staves[n.staffIndex];
+    return E.resolveNote({ clef: st.clef, staffStep: n.staffStep, keySig: st.keySig, accidental: n.accidental });
+  }
+
+  // ---- システム（縦に並ぶ段のまとまり）検出 ----
+  // 大譜表 = トレブル+バスの縦に近い譜表群を1システムとする。
+  // 段（システム）が縦に複数並ぶ楽譜で、コード範囲を1段に限定するために使う。
+  function computeSystems() {
+    var order = S.staves.map(function (s, i) { return i; });
+    order.sort(function (a, b) { return staffMidY(S.staves[a]) - staffMidY(S.staves[b]); });
+    var systems = [], cur = [];
+    for (var k = 0; k < order.length; k++) {
+      var i = order[k];
+      // ト音記号は「大譜表の始まり」→ 新しいシステムを開始。ヘ音は直前の段に属する。
+      if (S.staves[i].clef === 'treble') {
+        if (cur.length) systems.push(cur);
+        cur = [i];
+      } else {
+        if (cur.length === 0) cur = [i]; // 先頭がヘ音の場合の保険
+        else cur.push(i);
+      }
+    }
+    if (cur.length) systems.push(cur);
+    return systems;
+  }
+  // 範囲 r が属するシステム（縦範囲 top/bottom と含む譜表集合 set）を返す
+  function regionSystem(r) {
+    var systems = computeSystems();
+    if (!systems.length) return null;
+    var yc = (r && r.yc != null) ? r.yc : 0;
+    function bounds(sys) {
+      return {
+        set: sys,
+        top: Math.min.apply(null, sys.map(function (i) { return S.staves[i].topY; })),
+        bottom: Math.max.apply(null, sys.map(function (i) { return S.staves[i].bottomY; }))
+      };
+    }
+    var best = null, bestD = Infinity;
+    for (var s = 0; s < systems.length; s++) {
+      var b = bounds(systems[s]);
+      if (yc >= b.top && yc <= b.bottom) return b;   // 中に入っていれば即決
+      var d = Math.abs(yc - (b.top + b.bottom) / 2);
+      if (d < bestD) { bestD = d; best = b; }         // 外なら一番近いシステム
+    }
+    return best;
+  }
+
+  // ---- コード推定（範囲内・同一システムの音をまとめる） ----
+  function regionNotes(r) {
+    var lo = Math.min(r.x0, r.x1), hi = Math.max(r.x0, r.x1);
+    var sys = regionSystem(r);
+    return S.notes.filter(function (n) {
+      if (!S.staves[n.staffIndex]) return false;
+      if (n.x < lo || n.x > hi) return false;
+      if (sys && sys.set.indexOf(n.staffIndex) < 0) return false; // 別システムの音は除外
+      return true;
+    });
+  }
+  function regionChord(r) {
+    var ns = regionNotes(r).map(function (n) {
+      var rz = noteResolved(n);
+      return { midi: rz.midi, letter: rz.letter, accidental: rz.accidental, name: rz.name };
+    });
+    return E.identifyChord(ns, { maxCandidates: 4 });
+  }
+  function regionLabel(r) {
+    if (r.chosenName) return r.chosenName;
+    var c = regionChord(r);
+    return c.best ? c.best.name : null;
+  }
+
+  // ---- レッスン（小節送り） ----
+  function noteInMeasure(n, m) {
+    return m && S.staves[n.staffIndex] && n.x >= m.x0 && n.x <= m.x1 && m.set.indexOf(n.staffIndex) >= 0;
+  }
+  function measureNotes(m) {
+    return S.notes.filter(function (n) { return noteInMeasure(n, m); });
+  }
+  function measureChord(m) {
+    var ns = measureNotes(m).map(function (n) {
+      var rz = noteResolved(n);
+      return { midi: rz.midi, letter: rz.letter, accidental: rz.accidental, name: rz.name };
+    });
+    return E.identifyChord(ns, { maxCandidates: 4 });
+  }
+  function curMeasure() {
+    return (S.lessonIndex >= 0 && S.lessonIndex < S.measures.length) ? S.measures[S.lessonIndex] : null;
+  }
+  function updateLessonUI() {
+    var pos = document.getElementById('lessonPos');
+    var tgl = document.getElementById('lessonToggle');
+    var on = S.lessonIndex >= 0;
+    tgl.textContent = on ? '小節送り終了' : '小節送り開始';
+    tgl.classList.toggle('on', on);
+    pos.textContent = on ? (S.lessonIndex + 1) + ' / ' + S.measures.length + '小節' : '–';
+  }
+  function centerOnMeasure(m) {
+    if (!m) return;
+    var W = stage.clientWidth, H = stage.clientHeight;
+    // 倍率は「その段（大譜表）の高さ」基準で決める。小節ごとに変えないので
+    // 送っても縮尺が跳ねず、横にスライドするだけの自然な見え方になる。
+    var stepPx = pxPerStep(S.staves[m.set[0]]);
+    var sysH = (m.bottom - m.top) + stepPx * 8; // 上下に加線・ラベル・コード名ぶんの余白
+    var sc = (H * 0.72) / sysH;                  // ビュー高の ~72% に大譜表を収める
+    S.scale = Math.max(0.2, Math.min(sc, 2.2));  // 拡大しすぎ防止
+    // 小節を水平方向の中央へ、大譜表を垂直方向の中央へ
+    var cx = (m.x0 + m.x1) / 2, cy = (m.top + m.bottom) / 2;
+    S.offX = W / 2 - cx * S.scale;
+    S.offY = H / 2 - cy * S.scale;
+  }
+  function gotoMeasure(i) {
+    if (!S.measures.length) return;
+    S.lessonIndex = Math.max(0, Math.min(S.measures.length - 1, i));
+    centerOnMeasure(curMeasure());
+    updateLessonUI(); renderPanels(); draw();
+  }
+
+  // ================= 描画 =================
+  function draw() {
+    var W = stage.clientWidth, H = stage.clientHeight;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#141824'; ctx.fillRect(0, 0, W, H);
+
+    if (!S.img) {
+      stage.classList.add('empty'); // 中央のドロップ導線(#dropzone)を表示
+      return;
+    }
+    stage.classList.remove('empty');
+    hint.textContent = modeHint();
+
+    // 画像
+    ctx.drawImage(S.img, w2sX(0), w2sY(0), S.img.width * S.scale, S.img.height * S.scale);
+
+    // 譜表オーバーレイ
+    for (var i = 0; i < S.staves.length; i++) drawStaff(S.staves[i], i === S.selStaff);
+    // 譜表設定の1クリック目マーカー
+    if (S.pendingStaffBottom != null) {
+      ctx.strokeStyle = '#e0a13a'; ctx.lineWidth = 1.5;
+      var yy = w2sY(S.pendingStaffBottom);
+      ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke();
+      var pName = (clefSel.value === 'treble' ? 'ト音（上段）' : 'ヘ音（下段）') + ' 最下線 → 次は最上線をクリック';
+      ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(20,24,36,.85)';
+      var pw = ctx.measureText(pName).width;
+      ctx.fillRect(8, yy - 22, pw + 12, 18);
+      ctx.fillStyle = '#e0a13a';
+      ctx.fillText(pName, 14, yy - 9);
+    }
+    // 範囲
+    for (var r = 0; r < S.regions.length; r++) drawRegion(S.regions[r], r === S.selRegion);
+    // ドラッグ中の範囲（開始した段の縦幅だけ）
+    if (S.mode === 'region' && S.drag) {
+      var x0 = w2sX(S.dragStart.x), x1 = w2sX(S.drag.x);
+      var pband = systemBandScreen(regionSystem({ yc: S.dragStart.y }));
+      ctx.fillStyle = 'rgba(224,161,58,.15)'; ctx.strokeStyle = '#e0a13a';
+      ctx.fillRect(Math.min(x0,x1), pband.yTop, Math.abs(x1-x0), pband.yBot - pband.yTop);
+    }
+    // レッスン：現在の小節のハイライト
+    drawLessonMeasure();
+    // 音符
+    for (var j = 0; j < S.notes.length; j++) drawNote(S.notes[j], j === S.selNote);
+    // 消しゴム範囲（ドラッグ中）
+    if (S._eraseBox) {
+      var b = S._eraseBox;
+      var ex0 = w2sX(Math.min(b.x0,b.x1)), ex1 = w2sX(Math.max(b.x0,b.x1));
+      var ey0 = w2sY(Math.min(b.y0,b.y1)), ey1 = w2sY(Math.max(b.y0,b.y1));
+      ctx.fillStyle = 'rgba(232,73,47,.15)';
+      ctx.strokeStyle = '#e8492f'; ctx.lineWidth = 1.5;
+      ctx.setLineDash([6,4]);
+      ctx.fillRect(ex0, ey0, ex1-ex0, ey1-ey0);
+      ctx.strokeRect(ex0, ey0, ex1-ex0, ey1-ey0);
+      ctx.setLineDash([]);
+    }
+    // 変更があれば Undo 履歴＋自動保存へ（デバウンス。パン/ズームだけなら差分なしで無視される）
+    scheduleCommit();
+  }
+
+  // レッスン中の小節を強調（帯＋コード名）
+  function drawLessonMeasure() {
+    var m = curMeasure(); if (!m) return;
+    var stepPx = pxPerStep(S.staves[m.set[0]]);
+    var padY = stepPx * 2.5;
+    var x0 = w2sX(m.x0), x1 = w2sX(m.x1);
+    var yTop = w2sY(m.top - padY), yBot = w2sY(m.bottom + padY);
+    ctx.fillStyle = 'rgba(91,141,239,.12)';
+    ctx.fillRect(x0, yTop, x1 - x0, yBot - yTop);
+    ctx.strokeStyle = '#5b8def'; ctx.lineWidth = 2;
+    ctx.strokeRect(x0, yTop, x1 - x0, yBot - yTop);
+    // コード名（小節の上）
+    var res = measureChord(m);
+    var label = res.best ? res.best.name : null;
+    var cx = (x0 + x1) / 2, mainY = Math.max(24, yTop - 10);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#8fb4ff';
+    ctx.fillText('小節 ' + (S.lessonIndex + 1) + ' / ' + S.measures.length, cx, Math.max(12, mainY - 22));
+    if (label) {
+      ctx.font = 'bold 22px system-ui'; ctx.fillStyle = '#e0a13a';
+      ctx.fillText(label, cx, mainY);
+    }
+  }
+
+  function drawStaff(st, selected) {
+    var W = stage.clientWidth;
+    var gap = pxPerStep(st) * 2 * S.scale; // 線間隔(screen)
+    ctx.lineWidth = selected ? 1.6 : 1;
+    ctx.strokeStyle = selected ? '#5b8def' : 'rgba(120,150,220,.55)';
+    for (var line = 0; line < 5; line++) {
+      var ws = st.bottomY - (line * 2) * pxPerStep(st); // 各線 staffStep 0,2,4,6,8
+      var y = w2sY(ws);
+      ctx.beginPath(); ctx.moveTo(w2sX(0), y); ctx.lineTo(w2sX(S.img.width), y); ctx.stroke();
+    }
+    // ラベル：譜表の種類
+    ctx.fillStyle = selected ? '#5b8def' : '#7f8bb0';
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText((st.clef === 'treble' ? 'ト音' : 'ヘ音') + ' / ' + KEY_LABELS[String(st.keySig)],
+                 w2sX(0) + 4, w2sY(st.topY) - 6);
+  }
+
+  // システムの縦範囲を screen 座標の [yTop, yBot] にして返す（帯やヒット判定に使う）
+  function systemBandScreen(sys) {
+    if (!sys) return { yTop: 0, yBot: stage.clientHeight };
+    // 余白はその段の五線間隔基準（小さめ）にして、隣の段へせり出さないようにする
+    var stepPx = (sys.set && S.staves[sys.set[0]]) ? pxPerStep(S.staves[sys.set[0]]) : 8;
+    var padY = stepPx * 2.5;
+    return { yTop: w2sY(sys.top - padY), yBot: w2sY(sys.bottom + padY) };
+  }
+
+  function drawRegion(r, selected) {
+    var x0 = w2sX(Math.min(r.x0, r.x1)), x1 = w2sX(Math.max(r.x0, r.x1));
+    var band = systemBandScreen(regionSystem(r));
+    ctx.fillStyle = selected ? 'rgba(224,161,58,.16)' : 'rgba(224,161,58,.07)';
+    ctx.fillRect(x0, band.yTop, x1 - x0, band.yBot - band.yTop);
+    ctx.strokeStyle = selected ? '#e0a13a' : 'rgba(224,161,58,.4)';
+    ctx.lineWidth = selected ? 1.6 : 1;
+    ctx.strokeRect(x0, band.yTop, x1 - x0, band.yBot - band.yTop);
+    // コード名（その段の上に）＋ 選択中は候補も小さく表示
+    if (S.density === 'selected' && !selected) return;
+    var res = regionChord(r);
+    var label = r.chosenName || (res.best ? res.best.name : null);
+    if (!label) return;
+    var cx = (x0 + x1) / 2;
+    ctx.textAlign = 'center';
+    var mainY = Math.max(24, band.yTop - 8);
+    if (selected && res.candidates.length > 1) {
+      var others = res.candidates.slice(1, 4).map(function (c) { return c.name; }).join('   ');
+      ctx.font = '12px system-ui'; ctx.fillStyle = '#c99a4e';
+      ctx.fillText('候補: ' + others, cx, Math.max(14, mainY - 22));
+    }
+    ctx.font = 'bold 20px system-ui'; ctx.fillStyle = '#e0a13a';
+    ctx.fillText(label, cx, mainY);
+  }
+
+  function drawNote(n, selected) {
+    var st = S.staves[n.staffIndex]; if (!st) return;
+    var wy = noteWorldY(st, n.staffStep);
+    var sx = w2sX(n.x), sy = w2sY(wy);
+    var rx = Math.max(4, pxPerStep(st) * S.scale * 1.05);
+    var ry = Math.max(3, rx * 0.75);
+    // 加線（五線の外にある場合、その音の位置に短い線）
+    drawLedger(st, n.staffStep, n.x);
+    // 符頭
+    ctx.beginPath(); ctx.ellipse(sx, sy, rx, ry, -0.35, 0, Math.PI * 2);
+    ctx.fillStyle = selected ? '#e0a13a' : '#e8492f';
+    ctx.globalAlpha = 0.9; ctx.fill(); ctx.globalAlpha = 1;
+    if (selected) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke(); }
+
+    // ラベル表示可否（レッスン中は現在の小節の音は常に表示）
+    var inLesson = noteInMeasure(n, curMeasure());
+    var show = (S.density === 'all') || (S.density === 'selected' && selected) || inLesson;
+    if (!show) return;
+    var label = noteName(n);
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    var tw = ctx.measureText(label).width;
+    var ly = sy - ry - 12;
+    ctx.fillStyle = 'rgba(20,24,36,.82)';
+    ctx.fillRect(sx - tw/2 - 4, ly - 11, tw + 8, 16);
+    ctx.fillStyle = selected ? '#ffd780' : '#8fd0ff';
+    ctx.fillText(label, sx, ly + 1);
+  }
+
+  function drawLedger(st, staffStep, worldX) {
+    if (staffStep >= 0 && staffStep <= 8) return;
+    var sx = w2sX(worldX);
+    var len = Math.max(8, pxPerStep(st) * S.scale * 2.2);
+    ctx.strokeStyle = 'rgba(150,170,230,.7)'; ctx.lineWidth = 1;
+    var from, to;
+    if (staffStep > 8) { from = 10; to = staffStep; } else { from = -2; to = staffStep; }
+    for (var s = from; (staffStep > 8 ? s <= to : s >= to); s += (staffStep > 8 ? 2 : -2)) {
+      if (s % 2 !== 0) continue;
+      var y = w2sY(noteWorldY(st, s));
+      ctx.beginPath(); ctx.moveTo(sx - len/2, y); ctx.lineTo(sx + len/2, y); ctx.stroke();
+    }
+  }
+
+  function modeHint() {
+    if (!S.staves.length && S.mode !== 'staff') return 'まず「譜表設定」で五線を合わせてください（下線→上線をクリック）。';
+    switch (S.mode) {
+      case 'staff': {
+        var cName = clefSel.value === 'treble' ? 'ト音（上段・メロディ）' : 'ヘ音（下段・コード/左手）';
+        var lead = '';
+        if (S._afterTreble) lead = '✓ 上段（ト音）を設定。続けて → ';
+        else if (S.staves.length > 0 && clefSel.value === 'treble') lead = '✓ この段を設定。次の段があれば → ';
+        return S.pendingStaffBottom == null
+          ? lead + '譜表設定【' + cName + '】：この譜表の五線の【最下線】をクリック。（別の譜表にしたい時は上の「設定する譜表」で切替え）'
+          : '譜表設定【' + cName + '】：同じ譜表の五線の【最上線】をクリック（キャンセルは Esc）。';
+      }
+      case 'note': return '音符：クリックで●を配置。●をクリックで選択→ Delete で削除（または●を右クリックで即削除）。↑↓で半段移動。';
+      case 'erase': return '消す：●をクリックで1個削除。囲むようにドラッグすると範囲内の●をまとめて削除（拍子・テンポ・符尾などの余分に）。';
+      case 'region': return 'コード範囲：横方向にドラッグして範囲を作成。範囲をクリックで選択。';
+      case 'pan': return '移動：ドラッグで移動、ホイールで拡大縮小。';
+    }
+    return '';
+  }
+
+  // ================= 入力 =================
+  function getMouseWorld(ev) {
+    var rect = cv.getBoundingClientRect();
+    return { x: s2wX(ev.clientX - rect.left), y: s2wY(ev.clientY - rect.top),
+             sx: ev.clientX - rect.left, sy: ev.clientY - rect.top };
+  }
+
+  function hitNote(m) {
+    var best = -1, bestD = Infinity;
+    for (var i = 0; i < S.notes.length; i++) {
+      var n = S.notes[i], st = S.staves[n.staffIndex]; if (!st) continue;
+      var sx = w2sX(n.x), sy = w2sY(noteWorldY(st, n.staffStep));
+      var d = Math.hypot(sx - m.sx, sy - m.sy);
+      var r = Math.max(6, pxPerStep(st) * S.scale * 1.3);
+      if (d < r && d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+  function hitRegion(m) {
+    for (var i = S.regions.length - 1; i >= 0; i--) {
+      var r = S.regions[i];
+      if (m.x < Math.min(r.x0,r.x1) || m.x > Math.max(r.x0,r.x1)) continue;
+      var sys = regionSystem(r);
+      if (sys) {
+        var stepPx = S.staves[sys.set[0]] ? pxPerStep(S.staves[sys.set[0]]) : 8;
+        var padY = stepPx * 2.5;
+        if (m.y < sys.top - padY || m.y > sys.bottom + padY) continue; // 別の段の同じx位置は無視
+      }
+      return i;
+    }
+    return -1;
+  }
+
+  // メイン操作（マウス/タッチ/ペン共通。ポインター配管から呼ばれる）
+  function mainDown(ev) {
+    if (!S.img) return;
+    var m = getMouseWorld(ev);
+    S.dragStart = m; S.drag = null; S._moved = false;
+
+    if (S.mode === 'pan') { S._panning = { ox:S.offX, oy:S.offY, x:ev.clientX, y:ev.clientY }; return; }
+
+    if (S.mode === 'staff') {
+      if (S.pendingStaffBottom == null) { S.pendingStaffBottom = m.y; }
+      else {
+        var bottomY = S.pendingStaffBottom, topY = m.y;
+        if (bottomY < topY) { var t = bottomY; bottomY = topY; topY = t; }
+        S.staves.push({ clef: clefSel.value, keySig: parseInt(keySel.value,10), bottomY: bottomY, topY: topY });
+        S.selStaff = S.staves.length - 1;
+        S.pendingStaffBottom = null;
+        syncStaffControls(); // 調号を引き継ぐ（大譜表は上下で同じ調号）
+        // ガイド: 上段(ト音)を置いたら自動で下段(ヘ音)へ。下段を置いたら次の段の上段へ。
+        var added = S.staves[S.selStaff];
+        if (added.clef === 'treble') { clefSel.value = 'bass'; S._afterTreble = true; }
+        else { clefSel.value = 'treble'; S._afterTreble = false; }
+      }
+      draw(); return;
+    }
+
+    if (S.mode === 'note') {
+      var hi = hitNote(m);
+      if (hi >= 0) { S.selNote = hi; S.selRegion = -1; renderPanels(); draw(); return; }
+      // 新規配置
+      if (!S.staves.length) return;
+      var si = nearestStaff(m.y);
+      var step = yToStaffStep(S.staves[si], m.y);
+      S.notes.push({ id: idSeq++, staffIndex: si, x: m.x, staffStep: step, accidental: null, overrideName: null });
+      S.selNote = S.notes.length - 1; S.selRegion = -1;
+      renderPanels(); draw(); return;
+    }
+
+    if (S.mode === 'erase') {
+      // クリック=1個削除 / ドラッグ=範囲内をまとめて削除。開始点だけ記録し、判定は move/up 側で。
+      S._eraseDown = m; S._eraseBox = null;
+      return;
+    }
+
+    if (S.mode === 'region') {
+      var hr = hitRegion(m);
+      // ドラッグ開始（mousemoveで範囲、mouseupで確定 or 選択）。y はどの段かの判定用。
+      S._regionDown = { x: m.x, y: m.y, hr: hr };
+      return;
+    }
+  }
+
+  // 右クリックで符頭を即削除（誤配置のやり直しを楽に）
+  cv.addEventListener('contextmenu', function (ev) {
+    if (!S.img) return;
+    ev.preventDefault();
+    var m = getMouseWorld(ev);
+    var hi = hitNote(m);
+    if (hi >= 0) {
+      S.notes.splice(hi, 1);
+      if (S.selNote === hi) S.selNote = -1;
+      else if (S.selNote > hi) S.selNote--;
+      renderPanels(); draw();
+    }
+  });
+
+  function mainMove(ev) {
+    if (!S.img) return;
+    if (S._panning) {
+      S.offX = S._panning.ox + (ev.clientX - S._panning.x);
+      S.offY = S._panning.oy + (ev.clientY - S._panning.y);
+      draw(); return;
+    }
+    if (S.mode === 'region' && S._regionDown) {
+      var m = getMouseWorld(ev); S._moved = true;
+      S.drag = m; S.dragStart = { x: S._regionDown.x, y: S._regionDown.y };
+      draw();
+    }
+    if (S.mode === 'erase' && S._eraseDown) {
+      var me = getMouseWorld(ev);
+      if (Math.hypot(me.sx - w2sX(S._eraseDown.x), me.sy - w2sY(S._eraseDown.y)) > 5) {
+        S._eraseBox = { x0: S._eraseDown.x, y0: S._eraseDown.y, x1: me.x, y1: me.y };
+        draw();
+      }
+    }
+  }
+
+  function mainUp(ev) {
+    if (S._panning) { S._panning = null; return; }
+    if (S.mode === 'erase' && S._eraseDown) {
+      if (S._eraseBox) {
+        // 範囲内の●を一括削除（拍子・テンポ・符尾などの誤検出をまとめて消す）
+        var b = S._eraseBox;
+        var lo = Math.min(b.x0, b.x1), hi = Math.max(b.x0, b.x1);
+        var top = Math.min(b.y0, b.y1), bot = Math.max(b.y0, b.y1);
+        S.notes = S.notes.filter(function (n) {
+          var st = S.staves[n.staffIndex]; if (!st) return true;
+          var wy = noteWorldY(st, n.staffStep);
+          return !(n.x >= lo && n.x <= hi && wy >= top && wy <= bot);
+        });
+      } else {
+        // ドラッグしていない＝クリック → カーソル直下の●を1個削除
+        var hd = hitNote(S._eraseDown);
+        if (hd >= 0) S.notes.splice(hd, 1);
+      }
+      S.selNote = -1;
+      S._eraseDown = null; S._eraseBox = null;
+      renderPanels(); draw();
+      return;
+    }
+    if (S.mode === 'region' && S._regionDown) {
+      var m = getMouseWorld(ev);
+      if (S._moved && Math.abs(m.x - S._regionDown.x) > 4) {
+        S.regions.push({ id: idSeq++, x0: S._regionDown.x, x1: m.x, yc: S._regionDown.y, chosenName: null });
+        S.selRegion = S.regions.length - 1; S.selNote = -1;
+      } else if (S._regionDown.hr >= 0) {
+        S.selRegion = S._regionDown.hr; S.selNote = -1;
+      }
+      S._regionDown = null; S.drag = null;
+      renderPanels(); draw();
+    }
+  }
+
+  // ---- ポインター配管（マウス/タッチ/ペンを統合） ----
+  // 1本指＝各モードの操作（マウスと同じ意味論）、2本指＝パン＋ピンチズーム。
+  var pointers = {}, pinch = null;
+  function pointerCount() { return Object.keys(pointers).length; }
+  function pinchGeom() {
+    var ids = Object.keys(pointers), a = pointers[ids[0]], b = pointers[ids[1]];
+    var rect = cv.getBoundingClientRect();
+    return { d: Math.hypot(a.x - b.x, a.y - b.y),
+             mx: (a.x + b.x) / 2 - rect.left, my: (a.y + b.y) / 2 - rect.top };
+  }
+  cv.addEventListener('pointerdown', function (ev) {
+    pointers[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
+    if (pointerCount() === 2) {
+      // 2本目の指：進行中の1本指ジェスチャを破棄してピンチへ移行
+      S._panning = null; S._regionDown = null; S._eraseDown = null;
+      S._eraseBox = null; S.drag = null;
+      var g = pinchGeom();
+      pinch = { d0: Math.max(10, g.d), scale0: S.scale, wx: s2wX(g.mx), wy: s2wY(g.my) };
+      draw(); ev.preventDefault(); return;
+    }
+    if (pointerCount() > 2) { ev.preventDefault(); return; }
+    mainDown(ev);
+  });
+  window.addEventListener('pointermove', function (ev) {
+    if (pointers[ev.pointerId]) pointers[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
+    if (pinch && pointerCount() >= 2) {
+      var g = pinchGeom();
+      S.scale = Math.max(0.05, Math.min(20, pinch.scale0 * g.d / pinch.d0));
+      S.offX = g.mx - pinch.wx * S.scale;
+      S.offY = g.my - pinch.wy * S.scale;
+      draw(); return;
+    }
+    mainMove(ev);
+  });
+  function pointerEnd(ev) {
+    var wasPinch = !!pinch;
+    delete pointers[ev.pointerId];
+    if (pinch) { if (pointerCount() < 2) pinch = null; return; } // ピンチ終了指は操作扱いしない
+    if (!wasPinch) mainUp(ev);
+  }
+  window.addEventListener('pointerup', pointerEnd);
+  window.addEventListener('pointercancel', pointerEnd);
+
+  // ホイールでカーソル中心ズーム
+  stage.addEventListener('wheel', function (ev) {
+    if (!S.img) return;
+    ev.preventDefault();
+    var rect = cv.getBoundingClientRect();
+    var mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+    var wx = s2wX(mx), wy = s2wY(my);
+    var factor = ev.deltaY < 0 ? 1.12 : 1/1.12;
+    S.scale = Math.max(0.05, Math.min(20, S.scale * factor));
+    S.offX = mx - wx * S.scale; S.offY = my - wy * S.scale;
+    draw();
+  }, { passive:false });
+
+  // キーボード
+  window.addEventListener('keydown', function (ev) {
+    if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
+    if (ev.key === 'Escape') { S.pendingStaffBottom = null; draw(); return; }
+    // レッスン中は ←/→ で小節送り（音符未選択のとき）
+    if (S.lessonIndex >= 0 && S.selNote < 0 && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
+      gotoMeasure(S.lessonIndex + (ev.key === 'ArrowRight' ? 1 : -1)); ev.preventDefault(); return;
+    }
+    if (S.selNote >= 0) {
+      var n = S.notes[S.selNote];
+      if (ev.key === 'ArrowUp') { n.staffStep++; n.overrideName=null; renderPanels(); draw(); ev.preventDefault(); }
+      else if (ev.key === 'ArrowDown') { n.staffStep--; n.overrideName=null; renderPanels(); draw(); ev.preventDefault(); }
+      else if (ev.key === 's') { n.accidental = 1; n.overrideName=null; renderPanels(); draw(); }
+      else if (ev.key === 'f') { n.accidental = -1; n.overrideName=null; renderPanels(); draw(); }
+      else if (ev.key === 'n') { n.accidental = 0; n.overrideName=null; renderPanels(); draw(); }
+      else if (ev.key === '0') { n.accidental = null; n.overrideName=null; renderPanels(); draw(); }
+      else if (ev.key === 'Delete' || ev.key === 'Backspace') { S.notes.splice(S.selNote,1); S.selNote=-1; renderPanels(); draw(); ev.preventDefault(); }
+    } else if (S.selRegion >= 0 && (ev.key === 'Delete' || ev.key === 'Backspace')) {
+      S.regions.splice(S.selRegion,1); S.selRegion=-1; renderPanels(); draw(); ev.preventDefault();
+    } else if (S.selStaff >= 0 && (ev.key === 'Delete' || ev.key === 'Backspace')) {
+      // 譜表削除時は、その譜表の音符も削除
+      var idx = S.selStaff;
+      S.notes = S.notes.filter(function(nn){ return nn.staffIndex !== idx; });
+      S.notes.forEach(function(nn){ if (nn.staffIndex > idx) nn.staffIndex--; });
+      S.staves.splice(idx,1); S.selStaff=-1; syncStaffControls(); draw(); ev.preventDefault();
+    }
+  });
+
+  // ================= サイドパネル =================
+  function renderPanels() {
+    // 音符
+    if (S.selNote < 0) {
+      notePanel.className = 'muted';
+      notePanel.textContent = '音符を選択すると、ここで音名を確認・修正できます。';
+    } else {
+      var n = S.notes[S.selNote];
+      notePanel.className = '';
+      var accTxt = n.accidental === null ? '（調号に従う）' : (n.accidental === 0 ? 'ナチュラル' : (n.accidental > 0 ? 'シャープ' : 'フラット'));
+      notePanel.innerHTML = '';
+      var big = el('div','big', noteName(n));
+      var info = el('div','muted', '譜表: ' + (S.staves[n.staffIndex].clef==='treble'?'ト音':'ヘ音') + ' / 段位置 ' + n.staffStep + ' / 臨時記号: ' + accTxt);
+      var row1 = el('div','row');
+      row1.appendChild(mkBtn('半段↑', function(){ n.staffStep++; n.overrideName=null; renderPanels(); draw(); }));
+      row1.appendChild(mkBtn('半段↓', function(){ n.staffStep--; n.overrideName=null; renderPanels(); draw(); }));
+      var row2 = el('div','row');
+      row2.appendChild(mkBtn('♯', function(){ n.accidental=1; n.overrideName=null; renderPanels(); draw(); }));
+      row2.appendChild(mkBtn('♭', function(){ n.accidental=-1; n.overrideName=null; renderPanels(); draw(); }));
+      row2.appendChild(mkBtn('♮', function(){ n.accidental=0; n.overrideName=null; renderPanels(); draw(); }));
+      row2.appendChild(mkBtn('調号に従う', function(){ n.accidental=null; n.overrideName=null; renderPanels(); draw(); }));
+      var row3 = el('div','row');
+      var inp = document.createElement('input'); inp.type='text'; inp.placeholder='手動で上書き'; inp.value = n.overrideName || '';
+      inp.addEventListener('change', function(){ n.overrideName = inp.value.trim() || null; renderPanels(); draw(); });
+      row3.appendChild(inp);
+      row3.appendChild(mkBtn('削除','warn', function(){ S.notes.splice(S.selNote,1); S.selNote=-1; renderPanels(); draw(); }));
+      notePanel.appendChild(big); notePanel.appendChild(info);
+      notePanel.appendChild(row1); notePanel.appendChild(row2); notePanel.appendChild(row3);
+    }
+    // コード
+    var lm = curMeasure();
+    if (S.selRegion < 0 && lm) {
+      // レッスン中：現在の小節のコード・音・解説を表示
+      var lres = measureChord(lm);
+      var ks2 = S.staves[lm.set[0]] ? S.staves[lm.set[0]].keySig : 0;
+      chordPanel.className = '';
+      chordPanel.innerHTML = '';
+      chordPanel.appendChild(el('div','muted', '小節 ' + (S.lessonIndex + 1) + ' / ' + S.measures.length + '（←/→ で移動）'));
+      chordPanel.appendChild(el('div','big', (lres.best ? lres.best.name : '—')));
+      var mnotes = measureNotes(lm);
+      chordPanel.appendChild(el('div','muted', 'この小節の音: ' + (mnotes.map(function(nn){return noteName(nn);}).join(' ') || 'なし')));
+      if (lres.candidates.length > 1) {
+        chordPanel.appendChild(el('div','muted', '候補: ' + lres.candidates.slice(1,4).map(function(c){return c.name;}).join('  ')));
+      }
+      var lexpl = lres.best ? E.explainChord(lres.best, { keySig: ks2, notes: mnotes.map(noteResolved) }) : [];
+      if (lexpl.length) {
+        chordPanel.appendChild(el('h3', null, '解説'));
+        lexpl.forEach(function(sec){
+          var d = el('div'); d.style.margin = '5px 0'; d.style.lineHeight = '1.55';
+          var h = el('span', null, sec.head + '　'); h.style.color = '#e0a13a'; h.style.fontWeight = '700';
+          d.appendChild(h); d.appendChild(document.createTextNode(sec.body));
+          chordPanel.appendChild(d);
+        });
+      }
+      var lrow = el('div','row');
+      lrow.appendChild(mkBtn('◀ 前', function(){ gotoMeasure(S.lessonIndex - 1); }));
+      lrow.appendChild(mkBtn('次 ▶', function(){ gotoMeasure(S.lessonIndex + 1); }));
+      chordPanel.appendChild(lrow);
+    } else if (S.selRegion < 0) {
+      chordPanel.className = 'muted';
+      chordPanel.textContent = '「コード範囲」モードで範囲をドラッグすると、範囲内の音からコードを推定します。';
+    } else {
+      var r = S.regions[S.selRegion];
+      var res = regionChord(r);
+      chordPanel.className = '';
+      chordPanel.innerHTML = '';
+      chordPanel.appendChild(el('div','big', regionLabel(r) || '—'));
+      chordPanel.appendChild(el('div','muted', '範囲内の音: ' + regionNotes(r).map(function(nn){return noteName(nn);}).join(' ') || 'なし'));
+      chordPanel.appendChild(el('div','muted', '候補:'));
+      if (res.candidates.length === 0) chordPanel.appendChild(el('div','muted','（三和音以上が必要）'));
+      res.candidates.forEach(function(c){
+        var b = mkBtn(c.name + '  ' + (c.exact?'◎':'○') + ' ' + c.score, 'cand', function(){ r.chosenName = c.name; renderPanels(); draw(); });
+        chordPanel.appendChild(b);
+      });
+      // 解説（ルールベース・確実な範囲のみ）
+      var sysR = regionSystem(r);
+      var ksR = (sysR && S.staves[sysR.set[0]]) ? S.staves[sysR.set[0]].keySig : 0;
+      var rnotes = regionNotes(r).map(noteResolved);
+      var expl = res.best ? E.explainChord(res.best, { keySig: ksR, notes: rnotes }) : [];
+      if (expl.length) {
+        var hx = el('h3', null, '解説'); chordPanel.appendChild(hx);
+        expl.forEach(function(sec){
+          var d = el('div'); d.style.margin = '5px 0'; d.style.lineHeight = '1.55';
+          var h = el('span', null, sec.head + '　'); h.style.color = '#e0a13a'; h.style.fontWeight = '700';
+          d.appendChild(h); d.appendChild(document.createTextNode(sec.body));
+          chordPanel.appendChild(d);
+        });
+      }
+      var row = el('div','row');
+      var inp2 = document.createElement('input'); inp2.type='text'; inp2.placeholder='手動で上書き'; inp2.value = r.chosenName || '';
+      inp2.addEventListener('change', function(){ r.chosenName = inp2.value.trim() || null; renderPanels(); draw(); });
+      row.appendChild(inp2);
+      row.appendChild(mkBtn('自動に戻す', function(){ r.chosenName=null; renderPanels(); draw(); }));
+      row.appendChild(mkBtn('削除','warn', function(){ S.regions.splice(S.selRegion,1); S.selRegion=-1; renderPanels(); draw(); }));
+      chordPanel.appendChild(row);
+    }
+  }
+  function el(tag, cls, txt){ var e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; }
+  function mkBtn(txt, a, b){ var e=document.createElement('button'); var cb=b; if(typeof a==='function'){cb=a;} else if(a){e.className=a;} e.textContent=txt; e.addEventListener('click',cb); return e; }
+
+  // ================= ツールバー =================
+  document.getElementById('btnLoad').addEventListener('click', function(){ fileInput.click(); });
+  fileInput.addEventListener('change', function(){ if (fileInput.files[0]) loadImageFile(fileInput.files[0]); });
+  document.getElementById('btnAuto').addEventListener('click', autoDetect);
+
+  // ================= 自動認識（CV, ベストエフォート） =================
+  // 画像から五線と符頭を検出し、Phase 2 のアノテーションに「プリフィル」する。
+  // 結果は全て手動修正できる（誤りが出る前提）。
+  function autoDetect() {
+    if (!S.img) { alert('先に画像を開いてください。'); return; }
+    if (S.notes.length || S.staves.length) {
+      if (!confirm('自動認識で今の五線・音符を置き換えます。よろしいですか?')) return;
+    }
+    // オフスクリーンに実寸で描いて画素を取得（blob URL 同一オリジンなので getImageData 可）
+    var oc = document.createElement('canvas');
+    oc.width = S.img.width; oc.height = S.img.height;
+    var octx = oc.getContext('2d');
+    octx.drawImage(S.img, 0, 0);
+    var imgData;
+    try { imgData = octx.getImageData(0, 0, oc.width, oc.height); }
+    catch (e) { alert('画像の読み取りに失敗しました（セキュリティ制限）。'); return; }
+
+    var ks = parseInt(keySel.value, 10) || 0;
+    var res = MusicCV.analyze(imgData, { keySig: ks });
+    if (!res.staves.length) {
+      alert('五線を検出できませんでした。手動の「譜表設定」で合わせてください。');
+      return;
+    }
+    // 検出した段 → 譜表モデル（上→下で ト音/ヘ音 を交互に割当。調号は現在の選択を採用）
+    S.staves = res.staves.map(function (d, i) {
+      return { clef: (i % 2 === 0 ? 'treble' : 'bass'), keySig: ks, bottomY: d.bottomY, topY: d.topY };
+    });
+    // 検出した符頭 → 音符（最寄りの段へ写像し、五線位置を算出）
+    S.notes = [];
+    res.noteheads.forEach(function (nd) {
+      var si = nearestStaff(nd.y); if (si < 0) return;
+      var step = yToStaffStep(S.staves[si], nd.y);
+      S.notes.push({ id: idSeq++, staffIndex: si, x: nd.x, staffStep: step, accidental: null, overrideName: null });
+    });
+    S.regions = [];
+    S.selStaff = S.selNote = S.selRegion = -1;
+    S.pendingStaffBottom = null;
+    // 小節線から小節区間を構築（レッスンの小節送りに使う）
+    S.measures = buildMeasures(res);
+    S.lessonIndex = -1;
+    // 自動認識直後は音名を全部出すとごちゃつくので「選択した音のみ」に切替え。
+    // 符頭●をクリックするとその音名だけ出る（指導中に注目させたい音を選べる）。
+    S.density = 'selected';
+    document.querySelectorAll('.dens').forEach(function (x) {
+      x.classList.toggle('on', x.dataset.d === 'selected');
+    });
+    updateLessonUI();
+    renderPanels(); draw();
+    alert('自動認識：五線 ' + S.staves.length + ' 段、符頭 ' + S.notes.length + ' 個、'
+        + '小節 ' + S.measures.length + ' 個を検出しました。\n'
+        + '調号は「' + KEY_LABELS[String(ks)] + '」として割当てました（必要なら各譜表で変更）。\n'
+        + '「小節送り開始」で1小節ずつ音名・コードを見せられます（指導向け）。\n'
+        + '誤り・抜けは手動で修正してください（●右クリックで削除／クリックで追加／↑↓で移動）。');
+  }
+
+  // 検出結果（res: {staves:[{xStart,xEnd,spacing,topY,bottomY}], barlines:[[x..]]}）から
+  // システムごとに小節区間を作る。読み順は段 上→下・小節 左→右。
+  function buildMeasures(res) {
+    var systems = computeSystems(); // S.staves は既に構築済み（res.staves と同じ並び）
+    var bl = res.barlines || [];
+    var out = [];
+    systems.forEach(function (set) {
+      var sp = res.staves[set[0]].spacing || 8;
+      var leftStart = Math.min.apply(null, set.map(function (i) { return res.staves[i].xStart || 0; }))
+                    + Math.round(sp * 5.5);
+      var rightEnd = Math.max.apply(null, set.map(function (i) { return res.staves[i].xEnd || res.w; }));
+      var top = Math.min.apply(null, set.map(function (i) { return S.staves[i].topY; }));
+      var bottom = Math.max.apply(null, set.map(function (i) { return S.staves[i].bottomY; }));
+      // このシステムの全段の小節線を集約 → 近い位置は1本にまとめる
+      var xs = [];
+      set.forEach(function (i) { (bl[i] || []).forEach(function (x) { if (x > leftStart && x < rightEnd) xs.push(x); }); });
+      xs.sort(function (a, b) { return a - b; });
+      var merged = [];
+      xs.forEach(function (x) {
+        if (merged.length && x - merged[merged.length - 1] < sp * 0.8) return; // 重複（別段の同じ小節線）
+        merged.push(x);
+      });
+      var bounds = [leftStart].concat(merged).concat([rightEnd]);
+      for (var m = 0; m < bounds.length - 1; m++) {
+        if (bounds[m + 1] - bounds[m] < sp * 1.2) continue; // 極端に狭い区間は無視
+        out.push({ x0: bounds[m], x1: bounds[m + 1], set: set.slice(), top: top, bottom: bottom });
+      }
+    });
+    return out;
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.mode'), function(b){
+    b.addEventListener('click', function(){
+      S.mode = b.dataset.mode; S.pendingStaffBottom = null; S._afterTreble = false;
+      // ガイド: 譜表設定に入ったら上段(ト音)から始める
+      if (S.mode === 'staff') { clefSel.value = 'treble'; }
+      document.querySelectorAll('.mode').forEach(function(x){ x.classList.toggle('on', x===b); });
+      draw();
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.dens'), function(b){
+    b.addEventListener('click', function(){
+      S.density = b.dataset.d;
+      document.querySelectorAll('.dens').forEach(function(x){ x.classList.toggle('on', x===b); });
+      draw();
+    });
+  });
+  document.getElementById('lessonToggle').addEventListener('click', function(){
+    if (S.lessonIndex >= 0) { S.lessonIndex = -1; updateLessonUI(); renderPanels(); draw(); return; }
+    if (!S.measures.length) { alert('小節が未検出です。「自動認識」を実行すると小節線から小節が作られます。'); return; }
+    gotoMeasure(0);
+  });
+  document.getElementById('lessonPrev').addEventListener('click', function(){ if (S.lessonIndex >= 0) gotoMeasure(S.lessonIndex - 1); });
+  document.getElementById('lessonNext').addEventListener('click', function(){ if (S.lessonIndex >= 0) gotoMeasure(S.lessonIndex + 1); });
+  clefSel.addEventListener('change', function(){ if (S.selStaff>=0){ S.staves[S.selStaff].clef = clefSel.value; draw(); } });
+  keySel.addEventListener('change', function(){ if (S.selStaff>=0){ S.staves[S.selStaff].keySig = parseInt(keySel.value,10); renderPanels(); draw(); } });
+  function syncStaffControls(){ if (S.selStaff>=0){ clefSel.value = S.staves[S.selStaff].clef; keySel.value = String(S.staves[S.selStaff].keySig); } }
+
+  document.getElementById('zoomIn').addEventListener('click', function(){ zoomCenter(1.2); });
+  document.getElementById('zoomOut').addEventListener('click', function(){ zoomCenter(1/1.2); });
+  document.getElementById('zoomFit').addEventListener('click', fit);
+  function zoomCenter(f){ var W=stage.clientWidth/2,H=stage.clientHeight/2; var wx=s2wX(W),wy=s2wY(H); S.scale=Math.max(0.05,Math.min(20,S.scale*f)); S.offX=W-wx*S.scale; S.offY=H-wy*S.scale; draw(); }
+
+  // ================= 画像読込 =================
+  function loadImageFile(file) {
+    if (!/^image\/(png|jpeg)$/.test(file.type)) { alert('PNG か JPG を指定してください'); return; }
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function(){
+      S.img = img; URL.revokeObjectURL(url); resetAnnotations(); fit();
+      persistImage(); resetHistory(); // 新しい画像＝新しい作業として保存・履歴を切り直す
+    };
+    img.src = url; // ローカルの blob URL。外部送信はしない。
+  }
+  function resetAnnotations(){
+    S.staves=[]; S.notes=[]; S.regions=[]; S.measures=[]; S.lessonIndex=-1;
+    S.selStaff=S.selNote=S.selRegion=-1; S.pendingStaffBottom=null;
+    updateLessonUI(); renderPanels();
+  }
+  function fit(){
+    if (!S.img) return;
+    var W = stage.clientWidth, H = stage.clientHeight;
+    S.scale = Math.min(W / S.img.width, H / S.img.height) * 0.96;
+    S.offX = (W - S.img.width * S.scale)/2; S.offY = (H - S.img.height * S.scale)/2;
+    draw();
+  }
+
+  // ドラッグ&ドロップ
+  ['dragover','drop'].forEach(function(t){ stage.addEventListener(t, function(ev){ ev.preventDefault(); }); });
+  stage.addEventListener('drop', function(ev){
+    var f = ev.dataTransfer.files[0]; if (f) loadImageFile(f);
+  });
+  // 貼り付け
+  window.addEventListener('paste', function(ev){
+    var items = (ev.clipboardData || {}).items || [];
+    for (var i=0;i<items.length;i++){ if (items[i].type.indexOf('image')===0){ loadImageFile(items[i].getAsFile()); break; } }
+  });
+
+  // ================= 自動保存・Undo・書き出し/復元 =================
+  // すべてローカル（localStorage / ローカルファイル）。外部送信なし。
+  var LS_STATE = 'snr_state_v1', LS_IMG = 'snr_img_v1';
+  var undoStack = [], redoStack = [], lastSnap = null, commitTimer = null;
+  function currentSnap() {
+    return JSON.stringify({ staves: S.staves, notes: S.notes, regions: S.regions,
+                            measures: S.measures, lessonIndex: S.lessonIndex });
+  }
+  function persist(s) { try { localStorage.setItem(LS_STATE, s); } catch (e) {} }
+  // 変更をスナップショット化して Undo 履歴＋localStorage に積む。
+  // 各操作箇所にフックせず「draw 後にデバウンスで差分検知」する方式なので、
+  // 矢印キー連打などは1つの Undo 単位にまとまる。
+  function commitState() {
+    var s = currentSnap();
+    if (lastSnap === null) { lastSnap = s; persist(s); return; }
+    if (s !== lastSnap) {
+      undoStack.push(lastSnap); if (undoStack.length > 60) undoStack.shift();
+      redoStack.length = 0; lastSnap = s; persist(s);
+    }
+  }
+  function scheduleCommit() { clearTimeout(commitTimer); commitTimer = setTimeout(commitState, 400); }
+  function applySnap(s) {
+    var o; try { o = JSON.parse(s); } catch (e) { return; }
+    S.staves = o.staves || []; S.notes = o.notes || []; S.regions = o.regions || [];
+    S.measures = o.measures || []; S.lessonIndex = (o.lessonIndex != null ? o.lessonIndex : -1);
+    S.selStaff = S.selNote = S.selRegion = -1; S.pendingStaffBottom = null;
+    var mx = 0;
+    S.notes.concat(S.regions).forEach(function (x) { if (x.id > mx) mx = x.id; });
+    idSeq = mx + 1;
+    updateLessonUI(); renderPanels(); draw();
+  }
+  function undo() {
+    clearTimeout(commitTimer); commitState();
+    if (!undoStack.length) return;
+    redoStack.push(lastSnap); lastSnap = undoStack.pop(); persist(lastSnap); applySnap(lastSnap);
+  }
+  function redo() {
+    clearTimeout(commitTimer); commitState();
+    if (!redoStack.length) return;
+    undoStack.push(lastSnap); lastSnap = redoStack.pop(); persist(lastSnap); applySnap(lastSnap);
+  }
+  function resetHistory() {
+    undoStack.length = 0; redoStack.length = 0;
+    lastSnap = currentSnap(); persist(lastSnap);
+  }
+  function persistImage() {
+    if (!S.img) return;
+    try {
+      var oc = document.createElement('canvas');
+      oc.width = S.img.width; oc.height = S.img.height;
+      oc.getContext('2d').drawImage(S.img, 0, 0);
+      localStorage.setItem(LS_IMG, oc.toDataURL('image/png'));
+    } catch (e) { try { localStorage.removeItem(LS_IMG); } catch (e2) {} } // 容量超過時は注釈のみ保存
+  }
+  // 起動時：前回の作業（画像＋注釈）を自動復元
+  function restoreSession() {
+    var du = null, st = null;
+    try { du = localStorage.getItem(LS_IMG); st = localStorage.getItem(LS_STATE); } catch (e) {}
+    if (!du) return;
+    var img = new Image();
+    img.onload = function () { S.img = img; fit(); if (st) { lastSnap = st; applySnap(st); } };
+    img.src = du;
+  }
+  window.addEventListener('keydown', function (ev) {
+    if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'z' || ev.key === 'Z')) {
+      ev.preventDefault();
+      if (ev.shiftKey) redo(); else undo();
+    }
+  });
+  // タッチ環境（キーボードなし）向けのボタン
+  document.getElementById('btnUndo').addEventListener('click', undo);
+  document.getElementById('btnRedo').addEventListener('click', redo);
+
+  // 注釈つき画像のPNG書き出し（生徒に渡す用。全音名＋コードを焼き込む）
+  document.getElementById('btnPng').addEventListener('click', function () {
+    if (!S.img) { alert('先に画像を開いてください。'); return; }
+    var oc = document.createElement('canvas');
+    oc.width = S.img.width; oc.height = S.img.height;
+    var g = oc.getContext('2d');
+    g.drawImage(S.img, 0, 0);
+    // 音名（画像は白地なので、暗色チップ＋明色文字で焼き込む）
+    S.notes.forEach(function (n) {
+      var st = S.staves[n.staffIndex]; if (!st) return;
+      var y = noteWorldY(st, n.staffStep);
+      var r = Math.max(3, pxPerStep(st) * 1.05), ry = Math.max(2.5, r * 0.75);
+      g.beginPath(); g.ellipse(n.x, y, r, ry, -0.35, 0, Math.PI * 2);
+      g.fillStyle = 'rgba(232,73,47,.85)'; g.fill();
+      var label = noteName(n);
+      var fs = Math.max(10, Math.round(pxPerStep(st) * 1.9));
+      g.font = 'bold ' + fs + 'px system-ui'; g.textAlign = 'center';
+      var tw = g.measureText(label).width;
+      var ly = y - ry - 4;
+      g.fillStyle = 'rgba(20,24,36,.85)';
+      g.fillRect(n.x - tw / 2 - 3, ly - fs - 2, tw + 6, fs + 4);
+      g.fillStyle = '#8fd0ff'; g.fillText(label, n.x, ly - 3);
+    });
+    // コード（範囲）
+    S.regions.forEach(function (r) {
+      var res = regionChord(r);
+      var label = r.chosenName || (res.best ? res.best.name : null);
+      if (!label) return;
+      var sys = regionSystem(r);
+      var cx = (Math.min(r.x0, r.x1) + Math.max(r.x0, r.x1)) / 2;
+      var stepPx = (sys && S.staves[sys.set[0]]) ? pxPerStep(S.staves[sys.set[0]]) : 8;
+      var topY = sys ? sys.top : 0;
+      var fs = Math.max(14, Math.round(stepPx * 3.2));
+      g.font = 'bold ' + fs + 'px system-ui'; g.textAlign = 'center';
+      var tw2 = g.measureText(label).width;
+      var by = Math.max(fs + 6, topY - stepPx * 3);
+      g.fillStyle = 'rgba(20,24,36,.85)';
+      g.fillRect(cx - tw2 / 2 - 5, by - fs - 3, tw2 + 10, fs + 8);
+      g.fillStyle = '#ffb54d'; g.fillText(label, cx, by);
+    });
+    var a = document.createElement('a');
+    a.href = oc.toDataURL('image/png');
+    a.download = 'otomie.png';
+    a.click();
+  });
+
+  // 書き出し（画像＋注釈を1つのJSONに）／復元
+  document.getElementById('btnExport').addEventListener('click', function () {
+    if (!S.img) { alert('先に画像を開いてください。'); return; }
+    var oc = document.createElement('canvas');
+    oc.width = S.img.width; oc.height = S.img.height;
+    oc.getContext('2d').drawImage(S.img, 0, 0);
+    var data = { app: 'score-note-reader', version: 1,
+                 image: oc.toDataURL('image/png'), state: JSON.parse(currentSnap()) };
+    var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'score-annotations.json';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+  var jsonInput = document.getElementById('jsonfile');
+  document.getElementById('btnImport').addEventListener('click', function () { jsonInput.click(); });
+  jsonInput.addEventListener('change', function () {
+    var f = jsonInput.files[0]; jsonInput.value = '';
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      try {
+        var d = JSON.parse(r.result);
+        if (d.app !== 'score-note-reader' || !d.image || !d.state) throw new Error('format');
+        var img = new Image();
+        img.onload = function () {
+          S.img = img; fit();
+          lastSnap = JSON.stringify(d.state);
+          undoStack.length = 0; redoStack.length = 0;
+          persist(lastSnap); persistImage(); applySnap(lastSnap);
+        };
+        img.src = d.image;
+      } catch (e) { alert('読み込めませんでした（このアプリの保存ファイルではありません）。'); }
+    };
+    r.readAsText(f);
+  });
+
+  // ================= サンプル楽譜（初回体験用・その場で描画生成） =================
+  // 外部ファイルを持たず Canvas で合成する。C→Am→F→G / C→F→G→C の大譜表2段。
+  function makeSampleImage() {
+    var W = 1500, H = 780, sp = 14, x0 = 70, x1 = W - 50;
+    var c = document.createElement('canvas'); c.width = W; c.height = H;
+    var g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#000'; g.strokeStyle = '#000';
+    g.font = '28px system-ui'; g.fillText('サンプル：C — Am — F — G（ハ長調）', x0, 60);
+    function staffLines(top) { for (var i = 0; i < 5; i++) g.fillRect(x0, top + i * sp, x1 - x0, 2); }
+    function clefBlob(top) { // 音部記号の代わりのインク（検出側は左端をスキップするので形は不問）
+      g.save(); g.lineWidth = 6; g.beginPath();
+      g.moveTo(x0 + 18, top - 6);
+      g.bezierCurveTo(x0 + 42, top + 12, x0 + 6, top + 40, x0 + 26, top + 4 * sp + 4);
+      g.stroke(); g.restore();
+    }
+    function head(x, y, hollow) {
+      g.save(); g.translate(x, y); g.rotate(-0.3);
+      g.beginPath(); g.ellipse(0, 0, sp * 0.62, sp * 0.46, 0, 0, Math.PI * 2);
+      if (hollow) { g.lineWidth = 3; g.stroke(); } else { g.fill(); }
+      g.restore();
+    }
+    var systems = [{ t: 130, b: 260 }, { t: 440, b: 570 }];
+    var bars = [430, 790, 1150];
+    systems.forEach(function (sys) {
+      staffLines(sys.t); staffLines(sys.b);
+      clefBlob(sys.t); clefBlob(sys.b);
+      [sys.t, sys.b].forEach(function (top) {
+        bars.concat([x1 - 2]).forEach(function (bx) { g.fillRect(bx, top, 2, sp * 4 + 2); });
+      });
+    });
+    function yOf(top, step) { return top + 4 * sp + 1 - step * sp / 2; }
+    // 各小節：トレブル和音 + バスのルート音（step は最下線=0）
+    var prog = [
+      { sys: 0, x: 240, tre: [0, 2, 5], bas: [3] },  // C:  E4 G4 C5 / C3
+      { sys: 0, x: 600, tre: [3, 5, 7], bas: [1] },  // Am: A4 C5 E5 / A2
+      { sys: 0, x: 960, tre: [1, 3, 5], bas: [6] },  // F:  F4 A4 C5 / F3（バス最下線=G2, F3=step6）
+      { sys: 0, x: 1310, tre: [2, 4, 6], bas: [0] }, // G:  G4 B4 D5 / G2
+      { sys: 1, x: 240, tre: [0, 2, 5], bas: [3] },
+      { sys: 1, x: 600, tre: [1, 3, 5], bas: [6] },
+      { sys: 1, x: 960, tre: [2, 4, 6], bas: [0] },
+      { sys: 1, x: 1310, tre: [0, 2, 5], bas: [3], hollow: true } // 終止は白抜き（2分音符ふう）
+    ];
+    prog.forEach(function (m) {
+      var sys = systems[m.sys];
+      m.tre.forEach(function (s) { head(m.x, yOf(sys.t, s), m.hollow); });
+      m.bas.forEach(function (s) { head(m.x, yOf(sys.b, s), m.hollow); });
+      if (!m.hollow) { // 茎（細い縦線。符頭検出の孤立チェックに落ちない太さ）
+        var topY = yOf(sys.t, Math.max.apply(null, m.tre));
+        g.fillRect(m.x + Math.round(sp * 0.55), topY - Math.round(sp * 2.6), 2, Math.round(sp * 2.6));
+        var bY = yOf(sys.b, m.bas[0]);
+        g.fillRect(m.x - Math.round(sp * 0.62) - 2, bY, 2, Math.round(sp * 2.6));
+      }
+    });
+    return c.toDataURL('image/png');
+  }
+  document.getElementById('btnSample').addEventListener('click', function () {
+    var img = new Image();
+    img.onload = function () {
+      S.img = img; resetAnnotations(); fit();
+      persistImage(); resetHistory();
+    };
+    img.src = makeSampleImage();
+  });
+
+  resize();
+  restoreSession();
+  window.__S = S; // デバッグ用（ローカル完結アプリなので公開リスクなし）
+})();
+</script>
+</body>
+</html>
