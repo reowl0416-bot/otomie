@@ -1,26 +1,26 @@
 ---
 version: alpha
-name: 楽譜 音名・コード表示（Linear風）
+name: オトミエ（LEDテーマ）
 description: >
-  Linear の視覚言語に寄せた、対面/画面共有のライブ指導ツール。near-black のキャンバス(#010102)に
-  チャコールのパネル(#0f1011)と hairline のボーダー(#23252a)、シグネチャーのラベンダー(#5e6ad2)を
-  唯一のアクセントとして焦点にだけ使う。文字は明るいグレー(#f7f8f8)、タイポはタイトで負トラッキング。
-  静かで技術的、余計な色を持たない“ソフトウェアの計器盤”。
+  純黒(#000)のキャンバスに、LEDアシッドグリーン(#b8ff1f)が「点灯」するハードウェア・インジケーターの
+  メタファー（参考: Capsomnia）。アクティブな状態＝LEDが光る。文字は緑がかったオフホワイト(#f2f4ec)。
+  アクセントは一色、光（グロー）は意味のある場所（選択中・現在の小節・CTA）にだけ。
 colors:
-  canvas: "#010102"
-  surface: "#0b0c0d"
-  surface-1: "#0f1011"
-  surface-2: "#16181a"
-  surface-3: "#202225"
-  hairline: "#23252a"
-  hairline-strong: "#34343a"
-  ink: "#f7f8f8"
-  ink-subtle: "#8a8f98"
-  ink-tertiary: "#62666d"
-  primary: "#5e6ad2"
-  primary-hover: "#828fff"
-  on-primary: "#ffffff"
-  harmony: "#d7a44a"
+  canvas: "#000000"
+  surface: "#050505"
+  surface-1: "#0a0a0a"
+  surface-2: "#141414"
+  surface-3: "#1d1d1d"
+  hairline: "#1f1f1f"
+  hairline-strong: "#2f2f2f"
+  ink: "#f2f4ec"
+  ink-subtle: "#a7ad9c"
+  ink-tertiary: "#6f7466"
+  led: "#b8ff1f"
+  led-bright: "#d8ff63"
+  led-deep: "#92f21d"
+  led-glow: "rgba(184,255,31,0.55)"
+  on-led: "#000000"
   danger: "#e5484d"
   success: "#27a644"
 typography:
@@ -54,8 +54,8 @@ typography:
     fontWeight: 400
     letterSpacing: "0"
 rounded:
-  sm: "7px"
-  lg: "10px"
+  sm: "9px"
+  lg: "14px"
   pill: "999px"
 spacing:
   xxs: "4px"
@@ -71,11 +71,11 @@ components:
     rounded: "{rounded.sm}"
     padding: "6px 11px"
   button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
+    backgroundColor: "{colors.led}"
+    textColor: "{colors.on-led}"
   toggle-on:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
+    backgroundColor: "{colors.led}"
+    textColor: "{colors.on-led}"
   button-warn:
     backgroundColor: "transparent"
     textColor: "{colors.danger}"
@@ -84,7 +84,7 @@ components:
     rounded: "{rounded.lg}"
     padding: "12px 13px"
   hint:
-    backgroundColor: "rgba(15,16,17,0.92)"
+    backgroundColor: "rgba(5,5,5,0.92)"
     rounded: "{rounded.sm}"
     padding: "9px 12px"
   select:
@@ -95,63 +95,64 @@ components:
     rounded: "{rounded.sm}"
 ---
 
-# DESIGN.md — 楽譜 音名・コード表示（Linear風）
+# DESIGN.md — オトミエ（LEDテーマ）
 
 Google Labs（Stitch）の [DESIGN.md 仕様](https://github.com/google-labs-code/design.md) 準拠。
-配色・タイポは [awesome-design-md の Linear](https://github.com/VoltAgent/awesome-design-md) を実値ベースに、
-本アプリ（対面/画面共有のライブ指導・[CLAUDE.md](CLAUDE.md)）向けに最小限だけ拡張した。
+視覚言語は [Capsomnia](https://fuji-mak.github.io/Capsomnia/) の「LEDインジケーター」メタファーを参考に、
+本アプリ（対面/画面共有のライブ指導・[CLAUDE.md](CLAUDE.md)）向けに再構成した。
 実装は `index.html` の `<style>`（CSS変数）がこのトークンを反映する。
 
 ## Overview
 
-Linear の“near-black・技術的・静かに高級”な質感を、教える道具に移植する。ユーザーは画面を相手に共有しながら
-「この音は C4」「ここは Am7」と指す。だから UI は徹底して沈め、光るのは**焦点（選択中・現在の小節・コード名）だけ**。
-感情は「集中」「迷いのなさ」。Linear 同様、色は装飾に使わない — 意味のある一点にだけ置く。
+“純黒の機材に灯るLED”。UIは電源の落ちたハードウェアのように沈み、アクティブな状態だけがLEDグリーンに**点灯**する
+（選択中のモード＝点灯、現在の小節＝点灯、CTA＝点灯）。ユーザーは画面共有で「この音は C4」「ここは Am7」と指す。
+光は情報。グローは装飾ではなく「今ここが生きている」の合図としてのみ使う。
 
 ## Colors
 
-- 背景は near-black の階層：`canvas`(#010102) → `surface`(ヘッダー/パネル) → `surface-1`(カード) → `surface-2/3`(コントロール/ホバー)。差は極小、線(`hairline`)で仕切る。
-- 文字は `ink`(#f7f8f8) / `ink-subtle`(ラベル・補助) / `ink-tertiary`(最も弱い)。
-- アクセントは Linear のラベンダー `primary`(#5e6ad2) が主役で、**操作可能・選択中・フォーカス・主CTA**にのみ使う（装飾禁止）。
-- 本アプリ固有の意味色は最小追加：`harmony`(#d7a44a) はコード名/和声、`danger`(#e5484d) は削除/消しゴム。彩度は Linear の暗さに馴染むよう抑える。
-- キャンバス上と右パネルで色の意味を一致（選択音符＝ラベンダー、選択小節＝ラベンダー枠、消しゴム＝赤、コード＝アンバー）。
+- 背景は純黒の階層：`canvas`(#000) → `surface`(ヘッダー/パネル) → `surface-1`(カード) → `surface-2/3`(コントロール/ホバー)。差は極小、線(`hairline`)で仕切る。
+- 文字は緑がかったオフホワイト3段：`ink`(#f2f4ec) / `ink-subtle`(#a7ad9c) / `ink-tertiary`(#6f7466)。無彩色グレーではなくLEDと同族の色味に寄せる。
+- アクセントは LED グリーン一色（`led`#b8ff1f / hover `led-bright` / 深み `led-deep`）。**操作可能・選択中・フォーカス・CTA・現在の小節・コード名**に使う。
+- 点灯状態は `led-glow` のグロー（box-shadow）を伴う。グローは「状態」の表現であり装飾に撒かない。
+- 意味色は `danger`(#e5484d)＝削除/消しゴム のみ追加。
+- キャンバス上と右パネルで色の意味を一致（選択音符＝LED、現在の小節＝LED枠、コード＝LED、消しゴム＝赤）。白い譜面上のラベルは暗色チップに載せて可読性を確保。
 
 ## Typography
 
-- 単一のシステムフォント（`system-ui`／日本語 `Hiragino Sans`、Inter があれば使用）。外部フォントは読み込まない（オフライン厳守）。
-- Linear の“タイトで負トラッキング”を再現：本文 `-0.1px`、表示値 `-0.6px`。太さは 400（本文）/ 500（UI・ボタン）/ 600（表示値・見出し）。派手な太字は使わない。
-- 表示値（音名 `C4`・コード `Am7`）は `display`(28px/600) で最大。セクション見出しは `eyebrow`(10px・大文字・字間+0.6px)。機械的な値は `mono`。
+- 単一のシステムフォント（`system-ui`／日本語 `Hiragino Sans`）。外部フォントは読み込まない（オフライン厳守）。
+- タイトな負トラッキング：本文 `-0.1px`、表示値 `-0.6px`。太さは 400（本文）/ 500-600（UI）/ 700（点灯ボタン・タイトル）。
+- 表示値（音名 `C4`・コード `Am7`）は `display`(28px) で最大。セクション見出しは `eyebrow`(10px・大文字・字間+0.6px)。機械的な値は `mono`。
 
 ## Layout
 
-- 4px グリッド（`xxs`4 / `xs`8 / `sm`12 / `md`14 / `lg`16）。密度は高め（Linear のダッシュボード感）。
-- 3ペイン：ツールバー（役割ごとの箱＋hairline 区切り）／キャンバス（伸縮）／右パネル 300px。
-- CTA は先頭に1つ（自動認識＝ラベンダー）。画像を開くは副次。以降は箱で「モード／譜表・調号／密度／レッスン／ズーム」。
+- 4px グリッド（`xxs`4 / `xs`8 / `sm`12 / `md`14 / `lg`16）。密度は高め。
+- 3ペイン：ツールバー（役割ごとの箱＋hairline 区切り）／キャンバス（伸縮）／右パネル 300px。モバイルは横スクロール1行ツールバー＋下部パネル。
+- CTA は先頭に1つ（自動認識＝LED点灯）。画像を開くは副次。以降は箱で「モード／譜表・調号／密度／レッスン／ズーム」。
 
 ## Elevation & Depth
 
-- Linear 流に影を抑える。面の明度差と hairline で階層を作り、浮くのは overlay 的な要素（`hint`）だけ（`0 8px 24px rgba(0,0,0,.5)`）。
-- アクティブ状態は**塗り（ラベンダー）でフラットに**示す。内側ハイライトやグラデは使わない（Linear のフラットさ）。
-- ホバーは面を1段上げ、`hairline-strong` に締める。
+- 通常の影は抑え、面の明度差と hairline で階層を作る。浮くのは overlay 要素（`hint`）だけ。
+- **奥行きの主役はグロー**：点灯状態（`.on`/`.primary`/選択）に `0 0 10px var(--led-glow)`。ブランドのLEDドットは4.5sで呼吸（`prefers-reduced-motion` では停止）。
+- ホバーは面を1段上げ＋1px浮かせ、`hairline-strong` に締める。
 
 ## Shapes
 
-- 角丸は控えめでシャープ：コントロール `sm`7px、カード/箱 `lg`10px、チップ `pill`。
-- 丸みで柔らかくしすぎない。計器としての精度感を優先。
+- 角丸：コントロール `sm`9px、カード/箱 `lg`14px、チップ/バッジ `pill`。ハードウェアの筐体らしい、やや丸めの精度感。
 
 ## Components
 
-- **Button**：既定は `surface-2`＋hairline。`primary`（ラベンダー）＝唯一のCTAアクセント。`warn`（赤アウトライン）＝削除系、`ghost` はズーム等の低優先。
-- **Mode / Density トグル**：アクティブはラベンダー塗り。削除系モード（消す）は**アクティブ時に赤塗り**で危険を明示。
-- **Card**：右パネルの単位。`eyebrow` 見出し＋意味色ドット（音符=ラベンダー／コード=アンバー）。表示値は特大。
+- **Button**：既定は `surface-2`＋hairline。`primary`（LED・黒文字）＝CTA。`warn`（赤アウトライン）＝削除系、`ghost` は低優先。ホバーで1px浮く。
+- **Mode / Density トグル**：アクティブ＝LED点灯（黒文字＋グロー）。削除系モード（消す）は**アクティブ時に赤点灯**で危険を明示。
+- **Brand LED**：タイトル横の10pxドット。電源ランプとしてゆっくり呼吸する（アプリの生存表示）。
+- **Card**：右パネルの単位。`eyebrow` 見出し＋LEDドット。表示値（コード名）はLEDグリーンで特大。
 - **Hint**：キャンバス左上の overlay チップ。今のモードの操作を1行、`ink-subtle` で静かに。
-- **Select / Input**：暗い面、フォーカスでラベンダーのリング（`0 0 0 3px rgba(94,106,210,.32)`）。
-- **Dropzone（空状態）**：画像未読込時に中央の導線。淡色・低ノイズ。
+- **Select / Input**：暗い面、フォーカスは LED のアウトライン（2px, offset 2px）。
+- **Dropzone（空状態）**：中央の導線。アイコン背後に radial のLEDグローを敷く。CTAはLED。
 
 ## Do's and Don'ts
 
-- **Do** ラベンダーは焦点にだけ。**Don't** アクセントを装飾で撒かない（Linear の単一アクセント原則）。
-- **Do** near-black＋hairline で階層を作る。**Don't** 強い影・グラデ・光彩で立体化しない。
-- **Do** タイトな負トラッキングで“計器”らしく。**Don't** ゆったりした正トラッキングや極太フォントにしない。
-- **Do** 意味色は最小（ラベンダー＝操作／アンバー＝和声／赤＝削除）。**Don't** 色数を増やして賑やかにしない。
+- **Do** LEDは「点灯＝アクティブ」の意味でだけ光らせる。**Don't** グローを装飾で撒かない。
+- **Do** 純黒＋hairline で階層を作る。**Don't** LED以外の色を増やして賑やかにしない（例外は削除の赤のみ）。
+- **Do** 白い譜面上のラベルは暗色チップに載せる。**Don't** LEDグリーンの文字を白地に直置きしない（読めない）。
+- **Do** `prefers-reduced-motion` でアニメーションを止める。**Don't** 常時動く要素を増やさない（呼吸するのはブランドLED一つ）。
 - **Do** すべてローカル完結（Unicode／CSSのみ）。**Don't** 外部フォント/CDN/画像に依存しない。
