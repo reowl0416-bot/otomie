@@ -43,13 +43,12 @@
 - `cv.js` — 画像認識（五線・符頭・小節線検出。テスト18件）
 - テスト実行: `node engine.test.js` / `node cv.test.js`（Node がなければ `cat engine.js engine.test.js | osascript -l JavaScript`）
 
-## GitHub Pages で公開する手順
+## 公開ページ
 
-1. このフォルダを GitHub リポジトリに push（リポジトリ名の例: `otomie`）
-2. リポジトリの **Settings → Pages → Source: Deploy from a branch → main / (root)** を選択
-3. 数分後 `https://<アカウント名>.github.io/otomie/` で公開されます
-4. **公開URLが決まったら** `index.html` の `<head>` 内にある `og:url` と `og:image` の
-   `https://YOUR-ACCOUNT.github.io/otomie/` を実際のURLに書き換えて push（X のリンクカード用）
+▶ **https://reowl0416-bot.github.io/otomie/** （GitHub Pages）
+
+> メンテ用メモ: Settings → Pages → Source: Deploy from a branch → main / (root)。
+> OGP（Xのリンクカード）は `index.html` の `og:url` / `og:image` と `ogp.png` で設定済み。
 
 ## ライセンス
 
