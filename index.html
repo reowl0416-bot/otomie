@@ -158,6 +158,25 @@
   aside::-webkit-scrollbar { width:10px; }
   aside::-webkit-scrollbar-thumb { background:var(--surface-2); border-radius:6px; border:2px solid var(--surface); }
 
+  /* ---- ハウツー画面 ---- */
+  #howto { position:fixed; inset:0; z-index:130; background:rgba(0,0,0,.92);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+    -webkit-user-select:none; user-select:none; overflow-y:auto; }
+  .ht-panel { display:flex; flex-direction:column; align-items:center; gap:22px;
+    max-width:880px; text-align:center; }
+  .ht-title { font-size:clamp(1.4rem, 4vw, 2rem); font-weight:800; letter-spacing:-0.5px; }
+  .ht-steps { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; }
+  @media (max-width:760px) { .ht-steps { grid-template-columns:1fr; } }
+  .ht-step { background:var(--bg); border:1px solid var(--border-strong); border-radius:16px;
+    padding:20px 18px; text-align:left; display:flex; flex-direction:column; gap:9px; }
+  .ht-num { width:30px; height:30px; border-radius:50%; background:var(--led); color:#000;
+    font-weight:800; font-size:15px; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 12px 2px var(--led-glow); }
+  .ht-head { font-size:15.5px; font-weight:700; }
+  .ht-body { font-size:13px; color:var(--muted); line-height:1.8; }
+  .ht-body b { color:var(--led-bright); }
+  .ht-note { font-size:12px; color:var(--faint); }
+
   /* ---- ページャー（取り込んだページの行き来） ---- */
   #pager { position:absolute; left:14px; bottom:14px; display:flex; align-items:center; gap:6px;
     background:rgba(5,5,5,.92); border:1px solid var(--border-strong); border-radius:999px;
@@ -336,6 +355,31 @@
     </div>
   </div>
 </div>
+<!-- ハウツー画面：「はじめる」の直後に一度だけ表示（？ボタンで随時再表示） -->
+<div id="howto" class="vc-hidden">
+  <div class="ht-panel">
+    <div class="ht-title">使い方は、この3つだけ</div>
+    <div class="ht-steps">
+      <div class="ht-step">
+        <div class="ht-num">1</div>
+        <div class="ht-head">楽譜を入れる</div>
+        <div class="ht-body">「画像を開く」でスクショを選ぶか、<span class="kbd">⌘V</span> で貼り付け。YouTubeの楽譜動画は「動画から取り込み」でタブを共有すればOK。</div>
+      </div>
+      <div class="ht-step">
+        <div class="ht-num">2</div>
+        <div class="ht-head">自動認識を押す</div>
+        <div class="ht-body">音名（C4）とコード（Am7）の<b>下書き</b>が自動で付く。間違っている●はクリックで直せる・消せる。</div>
+      </div>
+      <div class="ht-step">
+        <div class="ht-num">3</div>
+        <div class="ht-head">1小節ずつ教える</div>
+        <div class="ht-body">「小節送り」で1小節だけ光らせて、音名・コード・かんたんな理論解説を見せられる。ページは左下の ◀▶ で行き来。</div>
+      </div>
+    </div>
+    <button id="htClose" class="primary vc-big">わかった、はじめる</button>
+    <div class="ht-note">あとで見たくなったら、画面右上の「？」でいつでも開けます</div>
+  </div>
+</div>
 <div id="app" class="no-img">
   <header>
     <div class="brand">
@@ -394,6 +438,7 @@
     <div class="sep"></div>
     <div class="group">
       <button id="zoomIn" class="icon ghost">＋</button><button id="zoomOut" class="icon ghost">−</button><button id="zoomFit" class="ghost">全体</button>
+      <button id="btnHelp" class="icon ghost" title="使い方を表示">？</button>
     </div>
   </header>
   <main>
@@ -1700,7 +1745,18 @@
     splash.classList.add('hide');
     setTimeout(function () { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 500);
   }
-  document.getElementById('spStart').addEventListener('click', hideSplash);
+  var HOWTO_KEY = 'snr_howto_seen_v1';
+  function showHowto() { document.getElementById('howto').classList.remove('vc-hidden'); }
+  document.getElementById('htClose').addEventListener('click', function () {
+    document.getElementById('howto').classList.add('vc-hidden');
+    try { localStorage.setItem(HOWTO_KEY, '1'); } catch (e) {}
+  });
+  document.getElementById('btnHelp').addEventListener('click', showHowto);
+  document.getElementById('spStart').addEventListener('click', function () {
+    hideSplash();
+    var seen = null; try { seen = localStorage.getItem(HOWTO_KEY); } catch (e) {}
+    if (!seen) showHowto(); // 初回だけ、①②③のハウツーを挟む
+  });
   // 「30秒で体験」：サンプル→自動認識→1小節目のレッスンまでノンストップ
   document.getElementById('spDemo').addEventListener('click', function () {
     hideSplash();
@@ -1935,7 +1991,23 @@
   });
 
   resize();
-  restoreSession();
+  // 毎回まっさらで開く。前回の作業がある場合だけ、扉に「つづきから」ボタンを出す
+  // （選んだときだけ復元。新しい取り込みを始めると前回分は上書きされる）
+  (function () {
+    var n = 0;
+    try {
+      var st = JSON.parse(localStorage.getItem(LS_STATES) || 'null');
+      if (st && st.states && st.states.length) n = st.states.length;
+      else if (localStorage.getItem(LS_IMG)) n = 1; // 旧形式
+    } catch (e) {}
+    if (!n) return;
+    var b = document.createElement('button');
+    b.className = 'sp-cta ghost';
+    b.textContent = '前回のつづきから（' + n + 'ページ）';
+    b.addEventListener('click', function () { restoreSession(); hideSplash(); });
+    var ctas = document.querySelector('.sp-ctas');
+    if (ctas) ctas.appendChild(b);
+  })();
   window.__S = S; // デバッグ用（ローカル完結アプリなので公開リスクなし）
 })();
 </script>
