@@ -87,5 +87,25 @@ function blobHollow(bin, w, h, cx, cy, rw, rh, lw) {
   ok(nh.length === 0, 'key-sig zone symbol skipped, got ' + nh.length);
 })();
 
+// ---- 動画キャプチャ想定：薄いグレーの五線（Otsuでは消える）→ 緩い2値化で救済 ----
+(function () {
+  var w = 400, h = 160;
+  var data = new Uint8ClampedArray(w * h * 4);
+  for (var i = 0; i < data.length; i++) data[i] = 255; // 白背景
+  function setPx(x, y, v) { var p = (y * w + x) * 4; data[p] = data[p+1] = data[p+2] = v; data[p+3] = 255; }
+  // 薄いグレー(205)の五線 5本（間隔12）
+  [40, 52, 64, 76, 88].forEach(function (yy) {
+    for (var x = 20; x < 380; x++) setPx(x, yy, 205);
+  });
+  // 濃い(30)符頭を1個（Otsuはこの黒と白の間にしきい値を置き、線が消える）
+  for (var y = 58; y <= 70; y++) for (var x = 193; x <= 207; x++) {
+    var ex = (x - 200) / 7, ey = (y - 64) / 6;
+    if (ex * ex + ey * ey <= 1) setPx(x, y, 30);
+  }
+  var res = CV.analyze({ data: data, width: w, height: h });
+  ok(res.staves.length === 1, 'faint gray staff rescued by lenient binarize, got ' + res.staves.length);
+  if (res.staves.length) ok(Math.abs(res.staves[0].spacing - 12) <= 1.5, 'faint staff spacing ~12');
+})();
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 if (typeof process !== 'undefined' && process.exit) process.exit(failed ? 1 : 0);

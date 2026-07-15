@@ -42,9 +42,9 @@
     return thr;
   }
 
-  function binarize(imageData) {
+  function binarize(imageData, fixedThr) {
     var g = toGray(imageData), w = imageData.width, h = imageData.height;
-    var thr = otsu(g);
+    var thr = fixedThr || otsu(g);
     var bin = new Uint8Array(w * h); // ink(黒)=1, 紙(白)=0
     for (var i = 0; i < g.length; i++) bin[i] = g[i] < thr ? 1 : 0;
     return { bin: bin, w: w, h: h, thresh: thr };
@@ -297,6 +297,14 @@
   function analyze(imageData, opts) {
     var b = binarize(imageData);
     var staves = detectStaves(b.bin, b.w, b.h);
+    if (!staves.length) {
+      // 動画キャプチャ等では五線が圧縮で薄いグレーになり、Otsu のしきい値
+      //（濃い音符と白背景の間）では背景側に落ちて消えることがある。
+      // 「ほぼ白でなければインク」の緩い2値化でもう一度だけ試す。
+      var b2 = binarize(imageData, 230);
+      var staves2 = detectStaves(b2.bin, b2.w, b2.h);
+      if (staves2.length) { b = b2; staves = staves2; }
+    }
     var noteheads = detectNoteheads(b.bin, b.w, b.h, staves, opts);
     var barlines = detectBarlines(b.bin, b.w, b.h, staves);
     return { staves: staves, noteheads: noteheads, barlines: barlines, w: b.w, h: b.h, thresh: b.thresh };
