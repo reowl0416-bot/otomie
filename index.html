@@ -115,6 +115,21 @@
   #dropzone .dz-title { font-size:17px; font-weight:700; color:var(--text); letter-spacing:-0.3px; }
   #dropzone .dz-sub { font-size:13px; color:var(--muted); line-height:1.7; max-width:420px; }
   #dropzone button { pointer-events:auto; margin-top:6px; } /* 親は pointer-events:none */
+  .dz-steps { display:flex; flex-direction:column; gap:9px; text-align:left; margin:4px 0 2px; }
+  .dz-steps > div { display:flex; align-items:center; gap:10px; font-size:14px; color:var(--text); }
+  .dz-steps span { flex:0 0 auto; width:22px; height:22px; border-radius:50%; background:var(--led);
+    color:#000; font-weight:800; font-size:12.5px; display:flex; align-items:center; justify-content:center; }
+  .dz-steps b { color:var(--led-bright); }
+  .dz-env { color:var(--faint); font-size:11.5px; }
+  /* 画像を読み込むまでは、編集系のコントロールを隠して圧を減らす */
+  #app.no-img .group.boxed, #app.no-img .sep, #app.no-img #btnAuto,
+  #app.no-img #btnNew, #app.no-img #btnExport, #app.no-img #btnImport, #app.no-img #btnPng,
+  #app.no-img #btnUndo, #app.no-img #btnRedo,
+  #app.no-img #zoomIn, #app.no-img #zoomOut, #app.no-img #zoomFit { display:none; }
+  aside a { color:var(--led-deep); }
+  details.fold { margin-top:6px; }
+  details.fold summary { cursor:pointer; color:var(--muted); font-size:12px; }
+  details.fold summary:hover { color:var(--text); }
 
   /* ---- 右パネル ---- */
   aside { width:300px; background:var(--surface); border-left:1px solid var(--border);
@@ -288,7 +303,7 @@
       <label class="vc-auto"><input type="checkbox" id="vcAuto" checked> 取り込んだら自動認識</label>
       <button id="vcClose2" class="warn">終了</button>
     </div>
-    <div class="vc-note">映像は端末内でのみ処理されます（外部送信なし）。楽譜の利用は私的利用・指導の範囲で。</div>
+    <div class="vc-note">PCの Chrome / Edge 推奨（iPhone/iPad は非対応）。映像は端末内でのみ処理されます（外部送信なし）。楽譜の利用は私的利用・指導の範囲で。</div>
   </div>
 </div>
 <div id="vcbar" class="vc-hidden">
@@ -311,7 +326,7 @@
   <div class="sp-body">
     <div class="sp-brand"><span class="sp-led"></span>オトミエ</div>
     <h1 class="sp-title">楽譜が、<span style="white-space:nowrap"><em>光って</em>見える。</span></h1>
-    <p class="sp-sub">スクショを読み込むだけで、すべての音に名前が、<br class="sp-br">すべての小節にコードが灯る。教える人のための道具。</p>
+    <p class="sp-sub">楽譜のスクショを入れるだけで、音名とコードの<b>下書き</b>が自動で灯る。<br class="sp-br">間違いはワンクリックで直せる、教える人のための読譜サポート。</p>
     <div class="sp-ctas">
       <button id="spStart" class="primary sp-cta">はじめる</button>
       <button id="spDemo" class="sp-cta ghost">30秒で体験（サンプル）</button>
@@ -321,7 +336,7 @@
     </div>
   </div>
 </div>
-<div id="app">
+<div id="app" class="no-img">
   <header>
     <div class="brand">
       <span class="logo">🎼</span>
@@ -393,11 +408,16 @@
       </div>
       <div id="dropzone">
         <div class="dz-icon">🎼</div>
-        <div class="dz-title">楽譜のスクショを読み込む</div>
-        <div class="dz-sub">「画像を開く」か、<span class="kbd">⌘/Ctrl + V</span> で貼り付け・ドラッグ&ドロップ。<br>読み込んだら「自動認識」で五線・符頭・小節を下書きします。<br><br>
-        ※きれいにレンダリングされた楽譜のスクショ向けです（紙の写真・手書きは非対応）。<br>
-        画像は<b>端末内だけで処理</b>され、外部に送信されることはありません。</div>
-        <button id="btnSample" class="primary">サンプル楽譜で試す</button>
+        <div class="dz-title">使い方は3ステップ</div>
+        <div class="dz-steps">
+          <div><span>1</span>楽譜のスクショを入れる（「画像を開く」/ 貼り付け / ドロップ）</div>
+          <div><span>2</span>「自動認識」→ 音名・コードの<b>下書き</b>が出る</div>
+          <div><span>3</span>間違いはクリックで直して、そのまま見せる</div>
+        </div>
+        <button id="btnSample" class="primary">まずはサンプル楽譜で試す</button>
+        <div class="dz-sub">きれいに印刷・表示された楽譜向け（紙の写真・手書きは非対応）。<br>
+        画像は<b>端末内だけで処理</b>、外部送信なし。<br>
+        <span class="dz-env">推奨：PCの Chrome / Edge ｜ iPad ○ ｜ スマホは閲覧向き ｜ 動画取り込みはPCのみ</span></div>
       </div>
     </div>
     <aside>
@@ -420,10 +440,28 @@
             <li><b>消す</b>：●クリックで1個、<b>囲んでドラッグ</b>で範囲一括削除（拍子・テンポ・符尾の掃除に）。</li>
             <li><b>コード範囲</b>：横ドラッグ → コード名。</li>
           </ol>
-          <div class="muted"><span class="kbd">⌘Z</span> 取り消し（<span class="kbd">⌘⇧Z</span> やり直し）/ <span class="kbd">s</span><span class="kbd">f</span><span class="kbd">n</span> 臨時記号 / <span class="kbd">0</span> 解除 / <span class="kbd">Del</span> 削除 / ●右クリックで即削除 / <span class="kbd">←→</span> 小節送り</div>
           <div class="muted" style="margin-top:6px">取り込んだページは自動で残り、左下の <span class="kbd">◀ ▶</span> でいつでも行き来できます（注釈もページごとに保存）。作業は自動保存され、次回開いたとき復元されます。「保存/復元」でファイルにも残せます。「PNG」で注釈つき画像を書き出せます。</div>
           <div class="muted" style="margin-top:6px">タッチ操作：<b>1本指</b>＝各モードの操作 / <b>2本指</b>＝移動・ピンチでズーム。</div>
-          <div class="muted" style="margin-top:8px; font-size:11px; color:var(--faint)">プライバシー：画像・注釈はすべて端末内で処理され、外部送信されません。<br>著作権：市販楽譜等のスクショは、私的利用・指導の正当な範囲でご利用ください。</div>
+          <details class="fold">
+            <summary>⌨️ ショートカット一覧（慣れたら時短に）</summary>
+            <div class="muted" style="margin-top:6px"><span class="kbd">⌘Z</span> 取り消し（<span class="kbd">⌘⇧Z</span> やり直し）/ <span class="kbd">s</span><span class="kbd">f</span><span class="kbd">n</span> 臨時記号 / <span class="kbd">0</span> 解除 / <span class="kbd">Del</span> 削除 / ●右クリックで即削除 / <span class="kbd">←→</span> 小節送り</div>
+          </details>
+        </div>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>このアプリについて</h3>
+        <div class="muted" style="font-size:12px; line-height:1.8">
+          レッスン支援のための個人開発ツールです。<br>
+          ・<b>自動認識は「下書き」</b>です。仕上げは人の目で確認してください<br>
+          ・データは<b>この端末のブラウザ内にのみ</b>保存。外部送信・登録・課金なし<br>
+          ・対応：PC（Chrome/Edge 推奨）／iPad ○／スマホ 閲覧向き／動画取り込みは PC のみ<br>
+          ・非対応：紙の写真・手書き譜
+          <div style="margin-top:8px; font-size:11px; color:var(--faint)">
+          <b>著作権のお願い</b>：市販楽譜等のスクショは私的利用・対面/画面共有レッスンの範囲で。
+          書き出したPNGのSNS投稿・配布・再配布は、楽譜の権利者の許諾範囲をご確認ください。レッスン内で見せることと、公開配布は別です。</div>
+          <div style="margin-top:8px">
+          <a href="https://github.com/reowl0416-bot/otomie" target="_blank" rel="noopener">ソースコード・更新履歴</a>　
+          <a href="https://github.com/reowl0416-bot/otomie/issues" target="_blank" rel="noopener">不具合報告・要望</a></div>
         </div>
       </div>
     </aside>
@@ -644,9 +682,11 @@
 
     if (!S.img) {
       stage.classList.add('empty'); // 中央のドロップ導線(#dropzone)を表示
+      document.getElementById('app').classList.add('no-img'); // 編集系UIも隠して圧を減らす
       return;
     }
     stage.classList.remove('empty');
+    document.getElementById('app').classList.remove('no-img');
     hint.textContent = modeHint();
 
     // 画像
