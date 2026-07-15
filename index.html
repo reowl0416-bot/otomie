@@ -143,6 +143,12 @@
   aside::-webkit-scrollbar { width:10px; }
   aside::-webkit-scrollbar-thumb { background:var(--surface-2); border-radius:6px; border:2px solid var(--surface); }
 
+  /* ---- ページャー（取り込んだページの行き来） ---- */
+  #pager { position:absolute; left:14px; bottom:14px; display:flex; align-items:center; gap:6px;
+    background:rgba(5,5,5,.92); border:1px solid var(--border-strong); border-radius:999px;
+    padding:5px 10px; box-shadow:var(--shadow); backdrop-filter:blur(4px); }
+  #pgPos { font-size:12px; font-weight:700; color:var(--led); min-width:44px; text-align:center; }
+
   /* ---- 動画キャプチャ取り込み ---- */
   .vc-hidden { display:none !important; }
   #vcap { position:fixed; inset:0; z-index:120; background:rgba(0,0,0,.82);
@@ -378,6 +384,11 @@
     <div id="stage" class="empty">
       <canvas id="cv"></canvas>
       <div id="hint"></div>
+      <div id="pager" class="vc-hidden">
+        <button id="pgPrev" class="icon ghost" title="前のページ">◀</button>
+        <span id="pgPos">1 / 1</span>
+        <button id="pgNext" class="icon ghost" title="次のページ">▶</button>
+      </div>
       <div id="dropzone">
         <div class="dz-icon">🎼</div>
         <div class="dz-title">楽譜のスクショを読み込む</div>
@@ -1303,8 +1314,9 @@
     var url = URL.createObjectURL(file);
     var img = new Image();
     img.onload = function(){
+      commitCurrentPage(); // 前ページの注釈を消える前に保存
       S.img = img; URL.revokeObjectURL(url); resetAnnotations(); fit();
-      persistImage(); resetHistory(); // 新しい画像＝新しい作業として保存・履歴を切り直す
+      addPage(imgToDataURL(img)); // 新しいページとして履歴に積む（◀▶で戻れる）
     };
     img.src = url; // ローカルの blob URL。外部送信はしない。
   }
@@ -1341,7 +1353,14 @@
     return JSON.stringify({ staves: S.staves, notes: S.notes, regions: S.regions,
                             measures: S.measures, lessonIndex: S.lessonIndex });
   }
-  function persist(s) { try { localStorage.setItem(LS_STATE, s); } catch (e) {} }
+  function persist(s) {
+    try {
+      if (PG.cur >= 0 && PG.cur < PG.list.length) PG.list[PG.cur].state = s;
+      localStorage.setItem(LS_STATES, JSON.stringify({
+        cur: PG.cur, states: PG.list.map(function (p) { return p.state; })
+      }));
+    } catch (e) {}
+  }
   // 変更をスナップショット化して Undo 履歴＋localStorage に積む。
   // 各操作箇所にフックせず「draw 後にデバウンスで差分検知」する方式なので、
   // 矢印キー連打などは1つの Undo 単位にまとまる。
@@ -1378,23 +1397,98 @@
     undoStack.length = 0; redoStack.length = 0;
     lastSnap = currentSnap(); persist(lastSnap);
   }
-  function persistImage() {
-    if (!S.img) return;
-    try {
-      var oc = document.createElement('canvas');
-      oc.width = S.img.width; oc.height = S.img.height;
-      oc.getContext('2d').drawImage(S.img, 0, 0);
-      localStorage.setItem(LS_IMG, oc.toDataURL('image/png'));
-    } catch (e) { try { localStorage.removeItem(LS_IMG); } catch (e2) {} } // 容量超過時は注釈のみ保存
+  // ---- ページ履歴：取り込んだ画像＋注釈をページとして保持し、◀▶で行き来できる ----
+  var LS_IMGS = 'snr_pages_imgs_v1', LS_STATES = 'snr_pages_states_v1';
+  var PG = { list: [], cur: -1 }; // {img: dataURL, state: json文字列}
+
+  function imgToDataURL(img) {
+    var oc = document.createElement('canvas');
+    oc.width = img.width; oc.height = img.height;
+    oc.getContext('2d').drawImage(img, 0, 0);
+    return oc.toDataURL('image/png');
   }
-  // 起動時：前回の作業（画像＋注釈）を自動復元
-  function restoreSession() {
-    var du = null, st = null;
-    try { du = localStorage.getItem(LS_IMG); st = localStorage.getItem(LS_STATE); } catch (e) {}
-    if (!du) return;
+  function commitCurrentPage() {
+    if (PG.cur >= 0 && PG.cur < PG.list.length)
+      PG.list[PG.cur] = { img: S._imgData, state: currentSnap() };
+  }
+  function savePages() { // 画像込みの保存は 追加/切替時のみ（毎編集は persist が状態だけ保存）
+    for (;;) {
+      try {
+        localStorage.setItem(LS_IMGS, JSON.stringify(PG.list.map(function (p) { return p.img; })));
+        break;
+      } catch (e) { // 容量超過 → 最古のページから破棄して再試行
+        if (PG.list.length > 1) { PG.list.shift(); if (PG.cur > 0) PG.cur--; }
+        else { try { localStorage.removeItem(LS_IMGS); } catch (e2) {} break; }
+      }
+    }
+    persist(lastSnap || currentSnap());
+  }
+  function addPage(dataURL, stateStr) {
+    // 注意: commitCurrentPage() は呼び出し側が「Sを新画像用にリセットする前」に行う
+    PG.list.push({ img: dataURL, state: stateStr || currentSnap() });
+    while (PG.list.length > 20) { PG.list.shift(); } // 上限20ページ（古い順に破棄）
+    PG.cur = PG.list.length - 1;
+    S._imgData = dataURL;
+    undoStack.length = 0; redoStack.length = 0;
+    lastSnap = stateStr || currentSnap();
+    savePages(); updatePager();
+  }
+  function gotoPage(i) {
+    if (i < 0 || i >= PG.list.length || i === PG.cur) return;
+    commitCurrentPage();
+    var pg = PG.list[i];
+    PG.cur = i;
     var img = new Image();
-    img.onload = function () { S.img = img; fit(); if (st) { lastSnap = st; applySnap(st); } };
-    img.src = du;
+    img.onload = function () {
+      S.img = img; S._imgData = pg.img;
+      undoStack.length = 0; redoStack.length = 0;
+      lastSnap = pg.state;
+      applySnap(pg.state);
+      fit();
+      persist(pg.state);
+      updatePager();
+    };
+    img.src = pg.img;
+  }
+  function updatePager() {
+    var pager = document.getElementById('pager');
+    pager.classList.toggle('vc-hidden', PG.list.length < 2);
+    document.getElementById('pgPos').textContent = (PG.cur + 1) + ' / ' + PG.list.length;
+  }
+  // 起動時：前回の作業（全ページ）を自動復元
+  function restoreSession() {
+    var imgs = null, st = null;
+    try {
+      imgs = JSON.parse(localStorage.getItem(LS_IMGS) || 'null');
+      st = JSON.parse(localStorage.getItem(LS_STATES) || 'null');
+    } catch (e) {}
+    if (imgs && imgs.length) {
+      PG.list = imgs.map(function (im, k) {
+        return { img: im, state: (st && st.states && st.states[k]) || '{}' };
+      });
+      PG.cur = Math.max(0, Math.min((st && st.cur) || 0, PG.list.length - 1));
+      var pg = PG.list[PG.cur];
+      var img = new Image();
+      img.onload = function () {
+        S.img = img; S._imgData = pg.img; fit();
+        lastSnap = pg.state; applySnap(pg.state);
+        updatePager();
+      };
+      img.src = pg.img;
+      return;
+    }
+    // 旧形式（単一ページ）からの移行
+    var du = null, s1 = null;
+    try { du = localStorage.getItem(LS_IMG); s1 = localStorage.getItem(LS_STATE); } catch (e) {}
+    if (!du) return;
+    var img2 = new Image();
+    img2.onload = function () {
+      S.img = img2; fit();
+      addPage(du, s1 || undefined);
+      if (s1) { lastSnap = s1; applySnap(s1); }
+      try { localStorage.removeItem(LS_IMG); localStorage.removeItem(LS_STATE); } catch (e) {}
+    };
+    img2.src = du;
   }
   window.addEventListener('keydown', function (ev) {
     if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'z' || ev.key === 'Z')) {
@@ -1479,10 +1573,10 @@
         if (d.app !== 'score-note-reader' || !d.image || !d.state) throw new Error('format');
         var img = new Image();
         img.onload = function () {
+          commitCurrentPage();
           S.img = img; fit();
-          lastSnap = JSON.stringify(d.state);
-          undoStack.length = 0; redoStack.length = 0;
-          persist(lastSnap); persistImage(); applySnap(lastSnap);
+          addPage(d.image, JSON.stringify(d.state));
+          applySnap(lastSnap);
         };
         img.src = d.image;
       } catch (e) { alert('読み込めませんでした（このアプリの保存ファイルではありません）。'); }
@@ -1549,8 +1643,9 @@
   function loadSample(andThen) {
     var img = new Image();
     img.onload = function () {
+      commitCurrentPage();
       S.img = img; resetAnnotations(); fit();
-      persistImage(); resetHistory();
+      addPage(img.src);
       if (andThen) andThen();
     };
     img.src = makeSampleImage();
@@ -1719,8 +1814,9 @@
     oc.getContext('2d').drawImage(VC.frame, c.x, c.y, c.w, c.h, 0, 0, oc.width, oc.height);
     var img = new Image();
     img.onload = function () {
+      commitCurrentPage();
       S.img = img; resetAnnotations(); fit();
-      persistImage(); resetHistory();
+      addPage(img.src); // ページとして保存（◀▶で前のページに戻れる）
       if (vcEl('vcAuto').checked) autoDetect({ silent: true });
       renderPanels(); draw();
     };
@@ -1756,6 +1852,9 @@
     VC.frame = f;
     vcImport(true);
   });
+
+  document.getElementById('pgPrev').addEventListener('click', function () { gotoPage(PG.cur - 1); });
+  document.getElementById('pgNext').addEventListener('click', function () { gotoPage(PG.cur + 1); });
 
   resize();
   restoreSession();
