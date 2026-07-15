@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>オトミエ — 楽譜の音名・コードが見える</title>
 <meta name="description" content="楽譜のスクショを読み込むと、音名（C4）とコード（Am7）を自動で重ねて表示。小節送りで1小節ずつ教えられる無料ツール。登録不要・画像は端末内で処理。">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%BC%3C/text%3E%3C/svg%3E">
 <meta property="og:url" content="https://reowl0416-bot.github.io/otomie/">
 <meta property="og:image" content="https://reowl0416-bot.github.io/otomie/ogp.png">
@@ -1989,6 +1992,11 @@
     };
     img.src = pg.img;
   });
+
+  // PWA: オフライン起動用の Service Worker（http/httpsで配信時のみ。外部送信なし）
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
 
   resize();
   // 毎回まっさらで開く。前回の作業がある場合だけ、扉に「つづきから」ボタンを出す

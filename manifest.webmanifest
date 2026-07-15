@@ -1,0 +1,15 @@
+{
+  "name": "オトミエ — 楽譜の音名・コードが見える",
+  "short_name": "オトミエ",
+  "description": "楽譜のスクショを読み込むと、音名とコードの下書きを自動表示。教える人のための読譜サポートツール。",
+  "lang": "ja",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
