@@ -334,6 +334,7 @@
       <button id="btnAuto" class="primary">自動認識</button>
       <button id="btnUndo" class="icon ghost" title="取り消し（⌘Z）">↶</button>
       <button id="btnRedo" class="icon ghost" title="やり直し（⌘⇧Z）">↷</button>
+      <button id="btnNew" class="ghost" title="すべてのページを消して新規の状態にする">新規</button>
       <button id="btnExport" class="ghost" title="画像と注釈をJSONファイルに保存">保存</button>
       <button id="btnImport" class="ghost" title="保存したJSONファイルから復元">復元</button>
       <button id="btnPng" class="ghost" title="注釈つき画像をPNGで書き出し">PNG</button>
@@ -388,6 +389,7 @@
         <button id="pgPrev" class="icon ghost" title="前のページ">◀</button>
         <span id="pgPos">1 / 1</span>
         <button id="pgNext" class="icon ghost" title="次のページ">▶</button>
+        <button id="pgDel" class="icon warn" title="このページを削除">✕</button>
       </div>
       <div id="dropzone">
         <div class="dz-icon">🎼</div>
@@ -1855,6 +1857,42 @@
 
   document.getElementById('pgPrev').addEventListener('click', function () { gotoPage(PG.cur - 1); });
   document.getElementById('pgNext').addEventListener('click', function () { gotoPage(PG.cur + 1); });
+
+  // 全クリア（新規）：保存されたページ・注釈をすべて消して初期状態へ
+  function resetToEmpty() {
+    PG.cur = -1; S.img = null; S._imgData = null;
+    resetAnnotations();
+    undoStack.length = 0; redoStack.length = 0; lastSnap = null;
+    try {
+      localStorage.removeItem(LS_IMGS); localStorage.removeItem(LS_STATES);
+      localStorage.removeItem(LS_IMG); localStorage.removeItem(LS_STATE);
+    } catch (e) {}
+    updatePager(); renderPanels(); draw();
+  }
+  document.getElementById('btnNew').addEventListener('click', function () {
+    if (!PG.list.length && !S.img) return;
+    if (!confirm('すべてのページと注釈を消して、新規の状態にします。よろしいですか?\n（残したい場合は先に「保存」でファイルに書き出せます）')) return;
+    PG.list = [];
+    resetToEmpty();
+  });
+  // 現在のページだけ削除
+  document.getElementById('pgDel').addEventListener('click', function () {
+    if (PG.cur < 0) return;
+    if (!confirm('このページ（' + (PG.cur + 1) + ' / ' + PG.list.length + '）を削除します。よろしいですか?')) return;
+    PG.list.splice(PG.cur, 1);
+    if (!PG.list.length) { resetToEmpty(); return; }
+    if (PG.cur >= PG.list.length) PG.cur = PG.list.length - 1;
+    var pg = PG.list[PG.cur];
+    var img = new Image();
+    img.onload = function () {
+      S.img = img; S._imgData = pg.img;
+      undoStack.length = 0; redoStack.length = 0;
+      lastSnap = pg.state;
+      applySnap(pg.state);
+      fit(); savePages(); updatePager();
+    };
+    img.src = pg.img;
+  });
 
   resize();
   restoreSession();
