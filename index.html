@@ -172,10 +172,14 @@
   .vc-auto { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); cursor:pointer; }
   .vc-note { font-size:11px; color:var(--faint); }
   #vcbar { position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:110;
-    display:flex; align-items:center; gap:10px; background:rgba(5,5,5,.94);
-    border:1px solid var(--border-strong); border-radius:999px; padding:8px 14px;
+    display:flex; align-items:center; gap:12px; background:rgba(5,5,5,.94);
+    border:1px solid var(--border-strong); border-radius:16px; padding:10px 14px;
     box-shadow:var(--shadow); backdrop-filter:blur(4px); }
-  .vc-bar-label { font-size:12.5px; color:var(--muted); }
+  #vcBarVideo { position:static; width:168px; max-height:100px; display:block; border-radius:9px;
+    border:1px solid var(--border-strong); cursor:pointer; background:#000; }
+  #vcBarVideo:hover { border-color:var(--led); }
+  .vc-bar-label { font-size:12.5px; color:var(--muted); line-height:1.5; max-width:190px; }
+  .vc-bar-label b { color:var(--led-bright); }
   @media (max-width:640px){ #vcbar { width:calc(100vw - 16px); justify-content:center; flex-wrap:wrap; } }
 
   /* ---- スタート画面（アプリの扉） ---- */
@@ -282,9 +286,9 @@
   </div>
 </div>
 <div id="vcbar" class="vc-hidden">
-  <span class="vc-dot"></span><span class="vc-bar-label" id="vcBarLabel">動画と接続中 — 動画のページを進めてから →</span>
-  <button id="vcNext" class="primary">次のページを取り込む</button>
-  <button id="vcReopen" class="ghost">範囲を設定し直す</button>
+  <video id="vcBarVideo" muted playsinline title="共有中の動画のライブ表示（クリックで大きく見る）"></video>
+  <span class="vc-bar-label" id="vcBarLabel">← 動画がここに映っています。<b>楽譜が変わったら</b> →</span>
+  <button id="vcNext" class="primary">今の楽譜を取り込む</button>
   <button id="vcStop" class="warn">終了</button>
 </div>
 
@@ -1598,7 +1602,7 @@
       vcEl('vcGuide').classList.add('vc-hidden');
       vcEl('vcTitle').textContent = dead
         ? '共有が切れています。もう一度共有してください'
-        : '動画側で、取り込みたい楽譜のページを表示してください';
+        : '共有した動画が下に映っています。取り込みたい楽譜が映ったらキャプチャ';
       vcEl('vcCapture').textContent = dead ? 'もう一度画面を共有' : 'この画面をキャプチャ';
     } else {
       vcEl('vcDead').classList.add('vc-hidden');
@@ -1616,10 +1620,10 @@
       lbl.textContent = msg;
       clearTimeout(vcShowBar._t);
       vcShowBar._t = setTimeout(function () {
-        lbl.textContent = '動画と接続中 — 動画のページを進めてから →';
+        lbl.innerHTML = '← 動画がここに映っています。<b>楽譜が変わったら</b> →';
       }, 2200);
     } else {
-      lbl.textContent = '動画と接続中 — 動画のページを進めてから →';
+      lbl.innerHTML = '← 動画がここに映っています。<b>楽譜が変わったら</b> →';
     }
   }
   function vcHideAll() { vcap.classList.add('vc-hidden'); vcbar.classList.add('vc-hidden'); }
@@ -1629,7 +1633,16 @@
       alert('この機能はこのブラウザでは使えません。PCの Chrome / Edge / Safari でお試しください。\n(iPhone/iPad は画面共有APIが未対応です)');
       return;
     }
-    navigator.mediaDevices.getDisplayMedia({ video: true, audio: false }).then(function (stream) {
+    var gdmOpts = { video: true, audio: false, selfBrowserSurface: 'exclude' };
+    // Chrome: 共有開始時に共有先タブへフォーカスが飛ぶのを防ぐ（オトミエに留まる）
+    if (window.CaptureController) {
+      try {
+        var ctrl = new CaptureController();
+        ctrl.setFocusBehavior('no-focus-change');
+        gdmOpts.controller = ctrl;
+      } catch (e) {}
+    }
+    navigator.mediaDevices.getDisplayMedia(gdmOpts).then(function (stream) {
       VC.stream = stream;
       var track = stream.getVideoTracks()[0];
       if (track) track.addEventListener('ended', function () {
@@ -1638,12 +1651,17 @@
       });
       VC.video.srcObject = stream;
       var p = VC.video.play(); if (p && p.catch) p.catch(function () {});
+      // バーのライブ小窓にも同じストリームを流す
+      var bv = vcEl('vcBarVideo');
+      bv.srcObject = stream;
+      var p2 = bv.play(); if (p2 && p2.catch) p2.catch(function () {});
       vcShow('preview');
     }).catch(function () { /* ユーザーがキャンセル */ });
   }
   function vcStopAll() {
     if (VC.stream) { VC.stream.getTracks().forEach(function (t) { t.stop(); }); VC.stream = null; }
     VC.video.srcObject = null;
+    vcEl('vcBarVideo').srcObject = null;
     vcHideAll();
   }
   function vcGrabFrame() {
@@ -1725,9 +1743,9 @@
   vcEl('vcClose').addEventListener('click', vcStopAll);
   vcEl('vcClose2').addEventListener('click', vcStopAll);
   vcEl('vcStop').addEventListener('click', vcStopAll);
-  vcEl('vcReopen').addEventListener('click', function () {
+  // 小窓クリック → 大きなプレビューへ（キャプチャし直し・範囲の引き直しもここから）
+  vcEl('vcBarVideo').addEventListener('click', function () {
     if (!vcAlive()) { vcStart(); return; }
-    VC.crop = null; // 範囲を設定し直す
     vcShow('preview');
   });
   // ページ送り：ライブ映像から同じ範囲で1クリック取り込み
