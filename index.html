@@ -143,6 +143,32 @@
   aside::-webkit-scrollbar { width:10px; }
   aside::-webkit-scrollbar-thumb { background:var(--surface-2); border-radius:6px; border:2px solid var(--surface); }
 
+  /* ---- 動画キャプチャ取り込み ---- */
+  .vc-hidden { display:none !important; }
+  #vcap { position:fixed; inset:0; z-index:120; background:rgba(0,0,0,.82);
+    display:flex; align-items:center; justify-content:center; padding:18px; }
+  .vc-panel { background:var(--bg); border:1px solid var(--border-strong); border-radius:var(--r-lg);
+    padding:14px 16px; max-width:min(880px, 94vw); display:flex; flex-direction:column; gap:10px;
+    box-shadow:var(--shadow); }
+  .vc-head { display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px; }
+  .vc-head .vc-sub { color:var(--faint); font-weight:500; font-size:12px; margin-left:auto; }
+  .vc-dot { width:9px; height:9px; border-radius:50%; background:var(--danger);
+    box-shadow:0 0 8px 2px rgba(229,72,77,.55); animation:led-pulse 2.2s ease-in-out infinite; flex:0 0 auto; }
+  .vc-media { position:relative; background:#000; border-radius:9px; overflow:hidden;
+    border:1px solid var(--border); }
+  #vcVideo, #vcFrame { display:block; max-width:min(820px, 88vw); max-height:56vh; width:auto; height:auto; }
+  #vcFrame { cursor:crosshair; touch-action:none; }
+  .vc-hint { font-size:12.5px; color:var(--muted); line-height:1.6; }
+  .vc-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .vc-auto { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); cursor:pointer; }
+  .vc-note { font-size:11px; color:var(--faint); }
+  #vcbar { position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:110;
+    display:flex; align-items:center; gap:10px; background:rgba(5,5,5,.94);
+    border:1px solid var(--border-strong); border-radius:999px; padding:8px 14px;
+    box-shadow:var(--shadow); backdrop-filter:blur(4px); }
+  .vc-bar-label { font-size:12.5px; color:var(--muted); }
+  @media (max-width:640px){ #vcbar { width:calc(100vw - 16px); justify-content:center; flex-wrap:wrap; } }
+
   /* ---- スタート画面（アプリの扉） ---- */
   #splash { position:fixed; inset:0; z-index:100; background:#000; display:flex;
     flex-direction:column; align-items:center; justify-content:center; text-align:center;
@@ -216,6 +242,36 @@
 </style>
 </head>
 <body>
+<!-- 動画キャプチャ取り込み：再生中のタブ/ウィンドウを共有してもらい、
+     楽譜の範囲を1回囲めば、以降は「次のページ」1クリックで切り出し→自動認識まで行う -->
+<div id="vcap" class="vc-hidden">
+  <div class="vc-panel">
+    <div class="vc-head">
+      <span class="vc-dot"></span>動画から取り込み
+      <span class="vc-sub" id="vcState">プレビュー</span>
+    </div>
+    <div class="vc-media">
+      <video id="vcVideo" muted playsinline></video>
+      <canvas id="vcFrame"></canvas>
+    </div>
+    <div class="vc-hint" id="vcHint"></div>
+    <div class="vc-actions">
+      <button id="vcCapture" class="primary">この画面をキャプチャ</button>
+      <button id="vcUse" class="primary">この範囲で取り込む</button>
+      <button id="vcRecrop" class="ghost">範囲をやり直す</button>
+      <label class="vc-auto"><input type="checkbox" id="vcAuto" checked> 取り込んだら自動認識</label>
+      <button id="vcClose" class="warn">終了</button>
+    </div>
+    <div class="vc-note">映像は端末内でのみ処理されます（外部送信なし）。楽譜の利用は私的利用・指導の範囲で。</div>
+  </div>
+</div>
+<div id="vcbar" class="vc-hidden">
+  <span class="vc-dot"></span><span class="vc-bar-label">動画キャプチャ中</span>
+  <button id="vcNext" class="primary">次のページを取り込む</button>
+  <button id="vcReopen" class="ghost">プレビュー</button>
+  <button id="vcStop" class="warn">終了</button>
+</div>
+
 <!-- スタート画面（アプリの扉）。「はじめる」で本体へ、「サンプルで体験」は自動認識まで一気に -->
 <div id="splash">
   <div class="sp-stage">
@@ -248,6 +304,7 @@
     </div>
     <div class="group">
       <button id="btnLoad">画像を開く</button>
+      <button id="btnVideo" title="再生中の動画（YouTube等）の画面から楽譜を取り込む">動画から取り込み</button>
       <button id="btnAuto" class="primary">自動認識</button>
       <button id="btnUndo" class="icon ghost" title="取り消し（⌘Z）">↶</button>
       <button id="btnRedo" class="icon ghost" title="やり直し（⌘⇧Z）">↷</button>
@@ -324,6 +381,8 @@
         <div class="help">
           <ol>
             <li><b>画像を開く</b>（<span class="kbd">⌘/Ctrl+V</span>・ドロップも可）→ <b>✨自動認識</b></li>
+            <li><b>動画から取り込み</b>：YouTube等を再生中のタブを共有→楽譜の範囲を1回囲む→以降は<b>「次のページ」1クリック</b>で取り込み（PCブラウザ）。</li>
+            <li><b>動画から取り込み</b>：YouTube等を再生中のタブを共有→楽譜の範囲を1回囲む→以降は<b>「次のページ」1クリック</b>で取り込み（PCブラウザ）。</li>
             <li><b>譜表設定</b>：上段（ト音）の<b>最下線→最上線</b>をクリック。<b>自動で下段（ヘ音）へ</b>切替。段が複数あれば繰り返す。</li>
             <li><b>音符</b>：クリックで●を配置／選択。<span class="kbd">↑↓</span>で半段移動。</li>
             <li><b>消す</b>：●クリックで1個、<b>囲んでドラッグ</b>で範囲一括削除（拍子・テンポ・符尾の掃除に）。</li>
@@ -1493,6 +1552,136 @@
       autoDetect({ silent: true });
       if (S.measures.length) gotoMeasure(0);
     });
+  });
+
+  // ================= 動画キャプチャ取り込み =================
+  // 再生中のタブ/ウィンドウ（YouTube等）を getDisplayMedia で共有してもらい、
+  // 楽譜の範囲を1回囲めば、以降「次のページを取り込む」1クリックで
+  // 同じ範囲を切り出し→（設定次第で）自動認識まで行う。映像は端末内のみ。
+  var VC = { stream: null, video: document.getElementById('vcVideo'), frame: null, crop: null, drag: null };
+  var vcap = document.getElementById('vcap'), vcbar = document.getElementById('vcbar');
+  var vcFrame = document.getElementById('vcFrame'), vcHint = document.getElementById('vcHint');
+
+  function vcShow(state) { // 'preview' | 'crop'
+    vcap.classList.remove('vc-hidden'); vcbar.classList.add('vc-hidden');
+    var isPrev = state === 'preview';
+    VC.video.style.display = isPrev ? 'block' : 'none';
+    vcFrame.style.display = isPrev ? 'none' : 'block';
+    document.getElementById('vcCapture').style.display = isPrev ? '' : 'none';
+    document.getElementById('vcUse').style.display = (!isPrev && VC.crop) ? '' : 'none';
+    document.getElementById('vcRecrop').style.display = isPrev ? 'none' : '';
+    document.getElementById('vcState').textContent = isPrev ? 'プレビュー' : '楽譜の範囲を指定';
+    vcHint.textContent = isPrev
+      ? '共有した画面がここに映ります。取り込みたい楽譜が表示された状態で「この画面をキャプチャ」。'
+      : (VC.crop ? '緑の枠が切り出し範囲です。よければ「この範囲で取り込む」。ドラッグで引き直せます。'
+                 : '楽譜の部分をドラッグで囲んでください（1回設定すれば、次のページからは同じ範囲で1クリック）。');
+  }
+  function vcShowBar() { vcap.classList.add('vc-hidden'); vcbar.classList.remove('vc-hidden'); }
+  function vcHideAll() { vcap.classList.add('vc-hidden'); vcbar.classList.add('vc-hidden'); }
+
+  function vcStart() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      alert('この機能はこのブラウザでは使えません。PCの Chrome / Edge / Safari でお試しください。\n(iPhone/iPad は画面共有APIが未対応です)');
+      return;
+    }
+    navigator.mediaDevices.getDisplayMedia({ video: true, audio: false }).then(function (stream) {
+      VC.stream = stream;
+      var track = stream.getVideoTracks()[0];
+      if (track) track.addEventListener('ended', vcStopAll); // ブラウザ側の「共有を停止」
+      VC.video.srcObject = stream;
+      var p = VC.video.play(); if (p && p.catch) p.catch(function(){});
+      VC.crop = null; VC.frame = null;
+      vcShow('preview');
+    }).catch(function () { /* ユーザーがキャンセル */ });
+  }
+  function vcStopAll() {
+    if (VC.stream) { VC.stream.getTracks().forEach(function (t) { t.stop(); }); VC.stream = null; }
+    VC.video.srcObject = null;
+    vcHideAll();
+  }
+  function vcGrabFrame() { // ライブ映像からフル解像度の1枚
+    var vw = VC.video.videoWidth, vh = VC.video.videoHeight;
+    if (!vw || !vh) return null;
+    var c = document.createElement('canvas'); c.width = vw; c.height = vh;
+    c.getContext('2d').drawImage(VC.video, 0, 0);
+    return c;
+  }
+  function vcDrawFrame() { // 停止フレーム＋切り出し枠
+    if (!VC.frame) return;
+    vcFrame.width = VC.frame.width; vcFrame.height = VC.frame.height;
+    var g = vcFrame.getContext('2d');
+    g.drawImage(VC.frame, 0, 0);
+    if (VC.crop) {
+      var c = VC.crop;
+      g.fillStyle = 'rgba(0,0,0,.45)'; // 範囲外を暗く
+      g.fillRect(0, 0, vcFrame.width, c.y);
+      g.fillRect(0, c.y + c.h, vcFrame.width, vcFrame.height - c.y - c.h);
+      g.fillRect(0, c.y, c.x, c.h);
+      g.fillRect(c.x + c.w, c.y, vcFrame.width - c.x - c.w, c.h);
+      g.strokeStyle = '#b8ff1f'; g.lineWidth = Math.max(2, vcFrame.width / 400);
+      g.setLineDash([10, 6]); g.strokeRect(c.x, c.y, c.w, c.h); g.setLineDash([]);
+    }
+  }
+  function vcPointerPos(ev) {
+    var r = vcFrame.getBoundingClientRect();
+    return { x: (ev.clientX - r.left) * vcFrame.width / r.width,
+             y: (ev.clientY - r.top) * vcFrame.height / r.height };
+  }
+  vcFrame.addEventListener('pointerdown', function (ev) {
+    VC.drag = vcPointerPos(ev);
+    if (vcFrame.setPointerCapture) vcFrame.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+  });
+  vcFrame.addEventListener('pointermove', function (ev) {
+    if (!VC.drag) return;
+    var p = vcPointerPos(ev);
+    VC.crop = { x: Math.min(VC.drag.x, p.x), y: Math.min(VC.drag.y, p.y),
+                w: Math.abs(p.x - VC.drag.x), h: Math.abs(p.y - VC.drag.y) };
+    vcDrawFrame();
+  });
+  vcFrame.addEventListener('pointerup', function () {
+    VC.drag = null;
+    if (VC.crop && (VC.crop.w < 40 || VC.crop.h < 40)) VC.crop = null; // 誤クリックは無視
+    vcDrawFrame(); vcShow('crop');
+  });
+
+  function vcImport() { // 現在のフレーム＋範囲で本体へ
+    if (!VC.frame) return;
+    var c = VC.crop || { x: 0, y: 0, w: VC.frame.width, h: VC.frame.height };
+    var oc = document.createElement('canvas');
+    oc.width = Math.max(1, Math.round(c.w)); oc.height = Math.max(1, Math.round(c.h));
+    oc.getContext('2d').drawImage(VC.frame, c.x, c.y, c.w, c.h, 0, 0, oc.width, oc.height);
+    var img = new Image();
+    img.onload = function () {
+      S.img = img; resetAnnotations(); fit();
+      persistImage(); resetHistory();
+      if (document.getElementById('vcAuto').checked) autoDetect({ silent: true });
+      renderPanels(); draw();
+    };
+    img.src = oc.toDataURL('image/png');
+    vcShowBar();
+  }
+
+  document.getElementById('btnVideo').addEventListener('click', vcStart);
+  document.getElementById('vcCapture').addEventListener('click', function () {
+    VC.frame = vcGrabFrame();
+    if (!VC.frame) { alert('映像がまだ届いていません。少し待ってからもう一度どうぞ。'); return; }
+    vcDrawFrame(); vcShow('crop');
+  });
+  document.getElementById('vcUse').addEventListener('click', vcImport);
+  document.getElementById('vcRecrop').addEventListener('click', function () { VC.crop = null; vcDrawFrame(); vcShow('crop'); });
+  document.getElementById('vcClose').addEventListener('click', vcStopAll);
+  document.getElementById('vcStop').addEventListener('click', vcStopAll);
+  document.getElementById('vcReopen').addEventListener('click', function () {
+    if (!VC.stream) { vcStart(); return; }
+    vcShow('preview');
+  });
+  // ページ送り：ライブ映像から同じ範囲で1クリック取り込み
+  document.getElementById('vcNext').addEventListener('click', function () {
+    var f = vcGrabFrame();
+    if (!f) { alert('映像が取得できませんでした。「プレビュー」から確認してください。'); return; }
+    VC.frame = f;
+    vcImport();
   });
 
   resize();
