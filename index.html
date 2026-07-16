@@ -484,7 +484,7 @@
             <li><b>画像を開く</b>（<span class="kbd">⌘/Ctrl+V</span>・ドロップも可）→ <b>✨自動認識</b></li>
             <li><b>動画から取り込み</b>：YouTube等を再生中のタブを共有→楽譜の範囲を1回囲む→以降は<b>「次のページ」1クリック</b>で取り込み（PCブラウザ）。</li>
             <li><b>譜表設定</b>：上段（ト音）の<b>最下線→最上線</b>をクリック。<b>自動で下段（ヘ音）へ</b>切替。段が複数あれば繰り返す。</li>
-            <li><b>音符</b>：クリックで●を配置／選択。<span class="kbd">↑↓</span>で半段移動。</li>
+            <li><b>音符</b>：何もない所をクリックで配置。●をクリックで選択（緑）、<b>続けてクリックで複数選択</b>できます（連続で光らせて見せられる）。<span class="kbd">↑↓</span>で半段移動、<span class="kbd">Esc</span>で選択解除。</li>
             <li><b>消す</b>：●クリックで1個、<b>囲んでドラッグ</b>で範囲一括削除（拍子・テンポ・符尾の掃除に）。</li>
             <li><b>コード範囲</b>：横ドラッグ → コード名。</li>
           </ol>
@@ -555,7 +555,7 @@
     staves: [],          // {clef, keySig, bottomY, topY}  (world座標)
     selStaff: -1,
     notes: [],           // {id, staffIndex, x, staffStep, accidental|null, overrideName|null}
-    selNote: -1,
+    selIds: [],          // 選択中の音符 id の配列（複数選択。末尾＝直近に選んだ音＝単一編集の対象）
     regions: [],         // {id, x0, x1, chosenName|null}
     selRegion: -1,
     density: 'all',
@@ -767,7 +767,7 @@
     // レッスン：現在の小節のハイライト
     drawLessonMeasure();
     // 音符
-    for (var j = 0; j < S.notes.length; j++) drawNote(S.notes[j], j === S.selNote);
+    for (var j = 0; j < S.notes.length; j++) drawNote(S.notes[j], isSel(S.notes[j]));
     // 消しゴム範囲（ドラッグ中）
     if (S._eraseBox) {
       var b = S._eraseBox;
@@ -926,7 +926,7 @@
           ? lead + '譜表設定【' + cName + '】：この譜表の五線の【最下線】をクリック。（別の譜表にしたい時は上の「設定する譜表」で切替え）'
           : '譜表設定【' + cName + '】：同じ譜表の五線の【最上線】をクリック（キャンセルは Esc）。';
       }
-      case 'note': return '音符：クリックで●を配置。●をクリックで選択→ Delete で削除（または●を右クリックで即削除）。↑↓で半段移動。';
+      case 'note': return '音符：何もない所をクリックで●を配置。●をクリックで選択（緑）、続けてクリックで複数選択できます。Esc で選択解除／↑↓で半段移動／Del で削除。';
       case 'erase': return '消す：●をクリックで1個削除。囲むようにドラッグすると範囲内の●をまとめて削除（拍子・テンポ・符尾などの余分に）。';
       case 'region': return 'コード範囲：横方向にドラッグして範囲を作成。範囲をクリックで選択。';
       case 'pan': return '移動：ドラッグで移動、ホイールで拡大縮小。';
@@ -939,6 +939,25 @@
     var rect = cv.getBoundingClientRect();
     return { x: s2wX(ev.clientX - rect.left), y: s2wY(ev.clientY - rect.top),
              sx: ev.clientX - rect.left, sy: ev.clientY - rect.top };
+  }
+
+  // ---- 音符の複数選択（id ベース。削除で index がズレても壊れない） ----
+  function isSel(n) { return S.selIds.indexOf(n.id) >= 0; }
+  function selNotes() { return S.notes.filter(isSel); }
+  function toggleSel(n) {
+    var k = S.selIds.indexOf(n.id);
+    if (k >= 0) S.selIds.splice(k, 1); else S.selIds.push(n.id);
+  }
+  function setSelOne(n) { S.selIds = n ? [n.id] : []; }
+  function clearSel() { S.selIds = []; }
+  function pruneSel() { // 存在しない id を掃除（削除後に呼ぶ）
+    var live = {}; S.notes.forEach(function (n) { live[n.id] = 1; });
+    S.selIds = S.selIds.filter(function (id) { return live[id]; });
+  }
+  function deleteSelected() {
+    var ids = {}; S.selIds.forEach(function (id) { ids[id] = 1; });
+    S.notes = S.notes.filter(function (n) { return !ids[n.id]; });
+    clearSel();
   }
 
   function hitNote(m) {
@@ -994,13 +1013,15 @@
 
     if (S.mode === 'note') {
       var hi = hitNote(m);
-      if (hi >= 0) { S.selNote = hi; S.selRegion = -1; renderPanels(); draw(); return; }
-      // 新規配置
+      // 既存の●をクリック＝選択に追加/解除（複数選択できる。連続して光らせられる）
+      if (hi >= 0) { toggleSel(S.notes[hi]); S.selRegion = -1; renderPanels(); draw(); return; }
+      // 何もない所をクリック＝新規配置（置いた音だけを選択して微調整しやすく）
       if (!S.staves.length) return;
       var si = nearestStaff(m.y);
       var step = yToStaffStep(S.staves[si], m.y);
-      S.notes.push({ id: idSeq++, staffIndex: si, x: m.x, staffStep: step, accidental: null, overrideName: null });
-      S.selNote = S.notes.length - 1; S.selRegion = -1;
+      var nn = { id: idSeq++, staffIndex: si, x: m.x, staffStep: step, accidental: null, overrideName: null };
+      S.notes.push(nn);
+      setSelOne(nn); S.selRegion = -1;
       renderPanels(); draw(); return;
     }
 
@@ -1026,8 +1047,7 @@
     var hi = hitNote(m);
     if (hi >= 0) {
       S.notes.splice(hi, 1);
-      if (S.selNote === hi) S.selNote = -1;
-      else if (S.selNote > hi) S.selNote--;
+      pruneSel();
       renderPanels(); draw();
     }
   });
@@ -1071,7 +1091,7 @@
         var hd = hitNote(S._eraseDown);
         if (hd >= 0) S.notes.splice(hd, 1);
       }
-      S.selNote = -1;
+      pruneSel();
       S._eraseDown = null; S._eraseBox = null;
       renderPanels(); draw();
       return;
@@ -1080,9 +1100,9 @@
       var m = getMouseWorld(ev);
       if (S._moved && Math.abs(m.x - S._regionDown.x) > 4) {
         S.regions.push({ id: idSeq++, x0: S._regionDown.x, x1: m.x, yc: S._regionDown.y, chosenName: null });
-        S.selRegion = S.regions.length - 1; S.selNote = -1;
+        S.selRegion = S.regions.length - 1; clearSel();
       } else if (S._regionDown.hr >= 0) {
-        S.selRegion = S._regionDown.hr; S.selNote = -1;
+        S.selRegion = S._regionDown.hr; clearSel();
       }
       S._regionDown = null; S.drag = null;
       renderPanels(); draw();
@@ -1148,20 +1168,22 @@
   // キーボード
   window.addEventListener('keydown', function (ev) {
     if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
-    if (ev.key === 'Escape') { S.pendingStaffBottom = null; draw(); return; }
+    if (ev.key === 'Escape') { S.pendingStaffBottom = null; clearSel(); renderPanels(); draw(); return; }
     // レッスン中は ←/→ で小節送り（音符未選択のとき）
-    if (S.lessonIndex >= 0 && S.selNote < 0 && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
+    if (S.lessonIndex >= 0 && !S.selIds.length && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
       gotoMeasure(S.lessonIndex + (ev.key === 'ArrowRight' ? 1 : -1)); ev.preventDefault(); return;
     }
-    if (S.selNote >= 0) {
-      var n = S.notes[S.selNote];
-      if (ev.key === 'ArrowUp') { n.staffStep++; n.overrideName=null; renderPanels(); draw(); ev.preventDefault(); }
-      else if (ev.key === 'ArrowDown') { n.staffStep--; n.overrideName=null; renderPanels(); draw(); ev.preventDefault(); }
-      else if (ev.key === 's') { n.accidental = 1; n.overrideName=null; renderPanels(); draw(); }
-      else if (ev.key === 'f') { n.accidental = -1; n.overrideName=null; renderPanels(); draw(); }
-      else if (ev.key === 'n') { n.accidental = 0; n.overrideName=null; renderPanels(); draw(); }
-      else if (ev.key === '0') { n.accidental = null; n.overrideName=null; renderPanels(); draw(); }
-      else if (ev.key === 'Delete' || ev.key === 'Backspace') { S.notes.splice(S.selNote,1); S.selNote=-1; renderPanels(); draw(); ev.preventDefault(); }
+    if (S.selIds.length) {
+      // 選択中のすべての音に適用（複数選択した和音をまとめて移動・臨時記号）
+      var sel = selNotes();
+      function apply(fn, pd) { sel.forEach(fn); renderPanels(); draw(); if (pd) ev.preventDefault(); }
+      if (ev.key === 'ArrowUp') { apply(function(n){ n.staffStep++; n.overrideName=null; }, true); }
+      else if (ev.key === 'ArrowDown') { apply(function(n){ n.staffStep--; n.overrideName=null; }, true); }
+      else if (ev.key === 's') { apply(function(n){ n.accidental=1; n.overrideName=null; }); }
+      else if (ev.key === 'f') { apply(function(n){ n.accidental=-1; n.overrideName=null; }); }
+      else if (ev.key === 'n') { apply(function(n){ n.accidental=0; n.overrideName=null; }); }
+      else if (ev.key === '0') { apply(function(n){ n.accidental=null; n.overrideName=null; }); }
+      else if (ev.key === 'Delete' || ev.key === 'Backspace') { deleteSelected(); renderPanels(); draw(); ev.preventDefault(); }
     } else if (S.selRegion >= 0 && (ev.key === 'Delete' || ev.key === 'Backspace')) {
       S.regions.splice(S.selRegion,1); S.selRegion=-1; renderPanels(); draw(); ev.preventDefault();
     } else if (S.selStaff >= 0 && (ev.key === 'Delete' || ev.key === 'Backspace')) {
@@ -1175,12 +1197,28 @@
 
   // ================= サイドパネル =================
   function renderPanels() {
-    // 音符
-    if (S.selNote < 0) {
+    // 音符（0個 / 1個 / 複数）
+    var selArr = selNotes();
+    if (selArr.length === 0) {
       notePanel.className = 'muted';
-      notePanel.textContent = '音符を選択すると、ここで音名を確認・修正できます。';
+      notePanel.textContent = '●をクリックで選択（緑）。続けてクリックすると複数を同時に選べます（連続で光らせられる）。';
+    } else if (selArr.length >= 2) {
+      // 複数選択：まとめて移動・臨時記号・削除
+      notePanel.className = '';
+      notePanel.innerHTML = '';
+      notePanel.appendChild(el('div','big', selArr.length + ' 個を選択中'));
+      notePanel.appendChild(el('div','muted', selArr.map(function(nn){ return noteName(nn); }).join('  ')));
+      var mres = E.identifyChord(selArr.map(noteResolved), { maxCandidates: 4 });
+      if (mres.best) notePanel.appendChild(el('div','muted', 'まとまり: ' + mres.best.name));
+      var mrow1 = el('div','row');
+      mrow1.appendChild(mkBtn('選択を半段↑', function(){ selArr.forEach(function(nn){ nn.staffStep++; nn.overrideName=null; }); renderPanels(); draw(); }));
+      mrow1.appendChild(mkBtn('半段↓', function(){ selArr.forEach(function(nn){ nn.staffStep--; nn.overrideName=null; }); renderPanels(); draw(); }));
+      var mrow2 = el('div','row');
+      mrow2.appendChild(mkBtn('選択解除', function(){ clearSel(); renderPanels(); draw(); }));
+      mrow2.appendChild(mkBtn('選択を削除','warn', function(){ deleteSelected(); renderPanels(); draw(); }));
+      notePanel.appendChild(mrow1); notePanel.appendChild(mrow2);
     } else {
-      var n = S.notes[S.selNote];
+      var n = selArr[0];
       notePanel.className = '';
       var accTxt = n.accidental === null ? '（調号に従う）' : (n.accidental === 0 ? 'ナチュラル' : (n.accidental > 0 ? 'シャープ' : 'フラット'));
       notePanel.innerHTML = '';
@@ -1198,7 +1236,7 @@
       var inp = document.createElement('input'); inp.type='text'; inp.placeholder='手動で上書き'; inp.value = n.overrideName || '';
       inp.addEventListener('change', function(){ n.overrideName = inp.value.trim() || null; renderPanels(); draw(); });
       row3.appendChild(inp);
-      row3.appendChild(mkBtn('削除','warn', function(){ S.notes.splice(S.selNote,1); S.selNote=-1; renderPanels(); draw(); }));
+      row3.appendChild(mkBtn('削除','warn', function(){ deleteSelected(); renderPanels(); draw(); }));
       notePanel.appendChild(big); notePanel.appendChild(info);
       notePanel.appendChild(row1); notePanel.appendChild(row2); notePanel.appendChild(row3);
     }
@@ -1314,7 +1352,7 @@
       S.notes.push({ id: idSeq++, staffIndex: si, x: nd.x, staffStep: step, accidental: null, overrideName: null });
     });
     S.regions = [];
-    S.selStaff = S.selNote = S.selRegion = -1;
+    S.selStaff = S.selRegion = -1; clearSel();
     S.pendingStaffBottom = null;
     // 小節線から小節区間を構築（レッスンの小節送りに使う）
     S.measures = buildMeasures(res);
@@ -1412,7 +1450,7 @@
   }
   function resetAnnotations(){
     S.staves=[]; S.notes=[]; S.regions=[]; S.measures=[]; S.lessonIndex=-1;
-    S.selStaff=S.selNote=S.selRegion=-1; S.pendingStaffBottom=null;
+    S.selStaff=S.selRegion=-1; clearSel(); S.pendingStaffBottom=null;
     updateLessonUI(); renderPanels();
   }
   function fit(){
@@ -1467,7 +1505,7 @@
     var o; try { o = JSON.parse(s); } catch (e) { return; }
     S.staves = o.staves || []; S.notes = o.notes || []; S.regions = o.regions || [];
     S.measures = o.measures || []; S.lessonIndex = (o.lessonIndex != null ? o.lessonIndex : -1);
-    S.selStaff = S.selNote = S.selRegion = -1; S.pendingStaffBottom = null;
+    S.selStaff = S.selRegion = -1; clearSel(); S.pendingStaffBottom = null;
     var mx = 0;
     S.notes.concat(S.regions).forEach(function (x) { if (x.id > mx) mx = x.id; });
     idSeq = mx + 1;
