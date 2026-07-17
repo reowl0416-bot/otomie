@@ -484,6 +484,7 @@
             <li><b>画像を開く</b>（<span class="kbd">⌘/Ctrl+V</span>・ドロップも可）→ <b>✨自動認識</b></li>
             <li><b>動画から取り込み</b>：YouTube等を再生中のタブを共有→楽譜の範囲を1回囲む→以降は<b>「次のページ」1クリック</b>で取り込み（PCブラウザ）。</li>
             <li><b>譜表設定</b>：上段（ト音）の<b>最下線→最上線</b>をクリック。<b>自動で下段（ヘ音）へ</b>切替。段が複数あれば繰り返す。</li>
+            <li><b>調号</b>：上の「調号」で曲のキー（♯♭）を選ぶと、<b>すべての音名に反映</b>されます（例: ♭2 なら B→B♭）。楽譜の左端の♯♭に合わせてください。</li>
             <li><b>音符</b>：何もない所をクリックで配置。●をクリックで選択（緑）、<b>続けてクリックで複数選択</b>できます（連続で光らせて見せられる）。<span class="kbd">↑↓</span>で半段移動、<span class="kbd">Esc</span>で選択解除。</li>
             <li><b>消す</b>：●クリックで1個、<b>囲んでドラッグ</b>で範囲一括削除（拍子・テンポ・符尾の掃除に）。</li>
             <li><b>コード範囲</b>：横ドラッグ → コード名。</li>
@@ -1428,7 +1429,14 @@
   document.getElementById('lessonPrev').addEventListener('click', function(){ if (S.lessonIndex >= 0) gotoMeasure(S.lessonIndex - 1); });
   document.getElementById('lessonNext').addEventListener('click', function(){ if (S.lessonIndex >= 0) gotoMeasure(S.lessonIndex + 1); });
   clefSel.addEventListener('change', function(){ if (S.selStaff>=0){ S.staves[S.selStaff].clef = clefSel.value; draw(); } });
-  keySel.addEventListener('change', function(){ if (S.selStaff>=0){ S.staves[S.selStaff].keySig = parseInt(keySel.value,10); renderPanels(); draw(); } });
+  keySel.addEventListener('change', function(){
+    var k = parseInt(keySel.value, 10) || 0;
+    // 譜表を1つ選んでいればその段だけ、選んでいなければ曲全体（全段）に適用。
+    // 調号は音名に直結する（例: ♭2 なら B→B♭・E→E♭）ので、変えたら即すべての音名へ反映。
+    if (S.selStaff >= 0) S.staves[S.selStaff].keySig = k;
+    else S.staves.forEach(function (st) { st.keySig = k; });
+    renderPanels(); draw();
+  });
   function syncStaffControls(){ if (S.selStaff>=0){ clefSel.value = S.staves[S.selStaff].clef; keySel.value = String(S.staves[S.selStaff].keySig); } }
 
   document.getElementById('zoomIn').addEventListener('click', function(){ zoomCenter(1.2); });
